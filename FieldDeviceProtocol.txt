@@ -1,0 +1,467 @@
+* Program data in S records or straight binary. Less overhead with binary and we are operating from limited space RAM. It that true? We only need to operate from RAM when actually erasing or writing. Code to receive and ecode msgs can still be in flash.
+* Binary is bad because we will have special characters in the data.
+
+============================================
+COMMS BETWEEN CONTROL BOARD AND FIELD DEVICES
+============================================
+
+---------------------------------
+Protocol
+--------------------------------
+The Control Board is the master and will poll all field devices. Field devices will only respond to messages from the Control Board if:
+
+(a) The message was received correctly
+(b) The message is appropriate and can be handled correctly
+
+There will be a number of reserved byte values with special meanings.
+
+Say D0 to D?
+
+SPECIAL MEANINGS
+D0 - Stuff character
+D1 - PacketStart
+D2 - PacketEnd
+D3 - MsgDelim
+D? - Special meaning
+
+Things like addresses and device types will avoid the range D0 - D?
+
+Byte stuffing will be used to transmit these byte values as data. To send D0-D? as data, first send a D0 then the value of byte with the MSB cleared i.e. to send D0 as data, send D0 50; to send D4 as data send D0 54.
+
+Byte stuffing will apply only on the transmission level. Stuffed bytes will be regarded as a single byte for message length and checksumming purposes.
+
+----------------------------------
+Packet Structure
+---------------------------------
+Each packet transmitted will have the following form:
+<Packet> = <PacketStart> <Message> <Checksum> <PacketEnd>
+
+<PacketStart> = D1
+<Message> = is defined below
+<Checksum> = Steven Murray's special 1 byte LRC algorithm of all bytes in <Message>
+<PacketEnd> = D2
+
+Packet transfer overhead is 3 bytes
+
+
+------------------------------
+Message Structure
+------------------------------
+Each message transmitted will have the following form:
+
+<Message> = <Type> <Address> <DeviceData>
+
+<Type> = 0-FE
+     FF is all types
+     FE is a discovery type
+
+<Address = 0-FFFE
+     FFFF is all addresses
+     FFFE is a discovery address   
+
+<DeviceData> = is device defined below
+
+If multiple messages are transmitted in a single packet they will be delimited by the <MsgDelim>.
+
+<MsgDelim> = D3
+
+Single Message in packet:
+
+<Message>
+
+Multiple Messages in Packet:
+
+<Message> <MsgDelim> <Message> <MsgDelim> . . . <Message>
+
+Message destination overhead is 3 bytes.
+
+Devices will always reply with <Type> and <Address>
+
+
+------------------------------
+Device Message Structure
+------------------------------
+All device Messages will have the following form:
+
+<DeviceData> = <Command> [<CommandData>]
+
+<Command> = <GeneralCommand> | <SpecificCommand>
+<CommandData> = is determined by the command
+
+<SpecificCommand> = 00-7F and are device specific
+<GeneralCommand> = 80-FF and are described below
+
+Devices will always reply with at least the <Command>
+
+------------------------------
+General Device Commands
+------------------------------
+00 = Reset
+ C>D No data
+ C<D No data
+01 = Send Description
+ C>D No data
+ C<D 10 or so bytes of description
+ Hardware version, software version, last reset, prog checksum etc
+02 = Send Status
+ C>D No data
+ C<D Reply will be device specific
+03 = Write Attribute Bytes
+ C>D <Addr:2> <Count:1> <DataBytes:1-65535>
+ C<D No Data
+04 = Read Attribute Bytes
+ C>D <Addr:2> <Count:1>
+ C<D <Addr:2> <Count:1> <DataBytes:1-65535>
+05 = Write Attribute Bits
+ C>D <Addr:2> <Offset:1> <Count:1> <DataBits:4>
+     or
+ C>D <Addr:2> <Mask:1> <DataByte:1>
+ C<D No data
+06 = Read Attribute Bits
+ C>D <Addr:2> <Offset:1> <Count:1>
+ C<D <Addr:2> <Offset:1> <Count:1> <DataBits:4>
+     or
+ C>D <Addr:2> <Mask:1>
+ C<D <Addr:2> <Mask:1> <DataByte:1>
+07 = Write Status Bytes
+
+08 = Read Status Bytes
+
+09 = Write Status Bits
+0A = Read Status Bits
+0B = Read Events
+ C>D No data. Events will be enumerated
+ C<D Event data will be device specific. No data = No events
+0C = Program S record in msg
+ C>D S record
+ C<D No data
+0D = Set Time
+ C>D Time data ??
+ C<D No Data
+0E = Clear Application Program and Reset
+ C>D No data
+ C<D No Data
+0F = Ping
+ C>D No data
+ C<D <Status:1> 0=NoApplication,1=ApplicationRunning
+10 = Send Application Checksum
+ C>D No data
+ C<D <Checksum:1>
+11 = Load Application and Reset
+ C>D No data
+ C<D No Data
+12 = Write Set Data
+ C>D <Set.1> <Element.2> <DataBytes:1-65535>
+ C<D No Data
+13 = Read Set Data
+ C>D <Set.1> <Element:2>
+ C<D <Set.1> <Element:2> <DataBytes:1-65535>
+14 = Describe Set
+ C>D <Set.1>
+ C<D <Set.1> <Set Descriptor Data: 12>  {Currently: Set#.1, B/E.1, E/S.2, Base_Addr.2, Special_Rd.2, Special_Wr.2, Buffer.2}
+15 = Find Elem
+ C>D <Set.1> <Start Element.2> <Start Position.1> <Data to Find: 1-Set Length>
+ C<D <Element.2>     {Element = $FFFF for 'not found'}
+16 = Delete Element
+ C>D <Set.1> <Element.2>
+ C<D No Data
+17 =  Send Message. Send Current (oldest) Message from message stack.
+ C>D No Data
+ C<D <Elem.2> <Message Data> or <FF FF> if no messages available.
+18 = Acknowledge/Delete Message. Acknowledge and Delete Current Msg from Msg stack.
+ C>D <Element.2>
+ C<D <Element.2>
+
+------------------------------
+Specific Device Command/Data - Distributed Device Pump Controller
+DDPC is Device Type 0x30 (Pump Mode) & 0x31 (Component Mode)
+------------------------------
+
+02 = Send Status
+ C>D No data
+ C<D DDPC: <StatusByte><StateByte> 	// Returns DDPC Status 
+         // Status Byte - Status flags
+         // State Byte - Pump Control State
+
+0x40 = Device Discovery & Adoption. 
+        Initially the message will be addressed to Type-0xFE, Address-0xFFFE. Any device without an address can answer.
+        C>D payload will be a temporary address of the form 0xFF<TempIndex>.
+        Device will answer FROM this temporary address with its real primary Device Type (rather than from the sending Type-0xFE, Addr-0xFFFE). 
+        Device payload will contain a random number to allow bus collisions to be obvious (and also cause CRC failure). 
+        Device will monitor and compare its own Tx/Rx and fall back to 0xFFFE if a collision occurs.
+## Addressed to 0xFFFE
+ C>D 0xFF<TempIndex>
+ C<D <RandomNum.1>
+
+        When a device has a temporary address of type 0xFF<TempIndex>, this message can be used to set the real address.
+        The response to this message will be FROM the new <FinalAddr>
+## Addressed to 0xFF<TempAddr>
+ C>D <FinalAddr>            // (Real address from ConDevs)
+ C<D <RandomNum.1>
+
+0x41 = Device Identification
+        This message will cause the device to identify itself, depending on its available hardware
+        This might take the form of beeping, LED flash patterns or enabling a relay/GPIO
+        The device may use the Option parameter to specify the action taken.
+        DDPC - Option=1 - LED pattern, Option=2 - Close relay (for 5 seconds)
+ C>D <Option.1>
+ C<D No Data
+
+0x42 = Action Command
+        This message will send the ActionValue to the Device. This ActionValue will have meaning to the device to 
+        trigger some type of action or function.
+        For a DDPC Pump Device, the Actions are similar to Gilbarco Pumps (not all supported):
+        ActionValue    Function/Action
+        0x00           GIL_CMD_STATUS - Return PumpState (1 byte)    
+        0x01           GIL_CMD_AUTHORISE - Authorise (No response payload)  
+        0x02           unused - GIL_CMD_GO_TO_DATA   // (60)NoResp=Unable (32),(60)Resp=1 MSN=D LSN=PumpID (5)
+        0x03           GIL_CMD_STOP - Stop the current Transaction (No Response)
+        0x04           GIL_CMD_SEND_TRANS - Request the details of the previous transaction (Resp = TransactionDataMsg (5))
+        0x05           GIL_CMD_SEND_TOTALS - Request the short totals message      (Resp=ShortTransDataMsg)
+        0x06           GIL_BUSY_TOTALS - Request the Short totals message           (Resp=ShortTransDataMsg) while pump is in Busy mode
+        0x07           GIL_CMD_PAID - "Pay off" the current transaction to signal completion (No Response payload)
+        0xF0           GIL_CMD_DATA_MSG - Send a Data message (e.g. to change price)  (No Response payload)
+        0xF1           GIL_CMD_EXCH_MSG - Exchange data message MultiByte Request, MultiByte Response
+        0xFC           GIL_CMD_ALL_EMERG_STOP - Emergency Stop (No Response payload)
+        0xFD           GIL_CMD_ALL_LIGHTS_ON - Turn on the Pump lights (No Response payload)	
+        0xFB           GIL_CMD_ALL_LIGHTS_OFF - Turn off the pump lights (No Response payload)
+                                     
+ C>D <ActionValue.1>
+ C<D <Optional depending on Function>
+
+
+
+
+------------------------------
+Specific Device Command/Data - Retail PSU Mark 2 Controller
+PSU_Mk2 Controller is Device Type 0x60
+------------------------------
+
+PSU_Mk2 only uses General Device Commands:
+
+#define PSU2_CMD_RESET 		0x00	 			// Reset the PSU2 Controller
+#define PSU2_CMD_DESC 		0x01    			// Fetch description of PSU2 Controller
+#define PSU2_CMD_STAT 		0x02    			// Fetch PSU2 Status
+#define PSU2_CMD_WRATTR_BYTE 	0x03    			// Write Attribute byte
+#define PSU2_CMD_RDATTR_BYTE 	0x04    			// Read Attribute byte
+ 
+------------------------------
+Specific Device Command/Data - KbdLCD Controller
+KbdLCD Controller is Device Type 0x10 (V1) & 0x11 (V2)
+------------------------------
+
+02 = Send Status
+ C>D No data
+ C<D KbdLCD: <StatusByte><CurrScreenID> // Returns KbdLCD Status and Current Screen ID number
+
+	======================================
+	**** KbdLCD Status Flags <StatusByte> ****
+	======================================
+	StatFlag  DS    1               ; [$AA] System Status Flag
+	ComAllOK  EQU   0               ; ENUM--StatFlag: Last Comms All-Call (Type or Addr) was successful
+	DevMsg    EQU   1               ; ENUM--StatFlag: Device Message available
+	DevEvt    EQU   2               ; ENUM--StatFlag: Event Message available
+	DevResp   EQU   3               ; ENUM--StatFlag: Screen Response message available
+	DevIOBusy EQU   4               ; ENUM--StatFlag: KbdLCD is currently busy with User IO
+	DevKey    EQU   5               ; ENUM--StatFlag: A Key has been pressed (Cleared with Stat request)
+	GotRead   EQU   6               ; ENUM--StatFlag: I have a new Key/Card Read
+
+
+30 = LCD Line String    // Line includes an ID number. IDs 1-4 are temporary & immediate
+ C>D <Counted String - Line Data> //  i.e. they are held in KbdLCD RAM for the next SCB that has 1-4
+ C<D <Set.1> <Element.2>   //  in a SCL position.
+31 = SCB (Screen Control Block)
+ C>D <SCB Bytes> {Currently: 14 Bytes + (4+) Screen Pointers (Max 32 Bytes) }
+ C<D <Set.1> <Element.2>
+32 = Custom Screen Handler Code
+ C>D <Handler Code>
+ C<D <Set.1> <Element.2>
+33 = Beep (New Pattern)
+ C>D <StyleMask.2> <Time.1>  // 2Bytes of Style + 2 Bytes of time in 1/10th seconds
+ C<D No Data
+
+34 = Display Screen
+ C>D <ScreenID.1><IDNum.2>  // IDNum is a random number identifying the transaction (will be returned in SreenResponse)
+ C<D <Flag.1>    // Flag 0=OK, 1=Screen Not Found
+
+35 = Return Screen Response   // KbdLCD will return a response if the IDNum is a match
+ C>D <IDNum.2>     // Otherwise it will return $FFFF as the IDNum.
+ C<D <IDNum.2><Last_Key><Multi-Byte Screen data>
+        // Where <Multi-Byte Screen data> consists of
+
+36 = Direct modify current screen parameter
+ C>D <Address.1> <Byte.1>  // Modify a screen parameter byte of the current screen
+ C<D No data    // e.g. No of chars required
+
+37 = Replace KbdBuffer & Update screen  // Replace the contects of the Keyboard buffer
+ C>D <Cnt.1><ASCII Data.n>  // KbdBuffer is a counted string.. Cnt,data,data...
+ C<D No Data
+
+38 = Return Last Key pressed   // KbdLCD will return the ASCII code of the Last Key pressed
+ C>D No data
+ C<D <ASCII data>     // Return 1 byte - Last Key pressed
+
+39 = Return Key Read Data
+ C>D No data
+ C<D <Status><Length><Read Data>
+
+3A = Receive Tag Data Write     // KbdLCD will receive a block of tag data to write
+ C>D <Command.1><Block.1><Data.4>  // Command, Block Number to write, 4 bytes of data
+ C<D No Data                    // Returns whether the write is possible
+                                //  .. the Status byte will indicate if the write was successful
+
+                                // Commands: 0 - Read OK - return to Idle (Mifare - Check for Tag removal)
+                                //           1 - Write Block	(Mifare - Write)
+                                //           2 - Force a 1-shot read (Mifare - Read)		
+
+------------------------------
+Specific Device Command/Data - 2 I/P, 2 O/P, 2 Temp
+------------------------------
+02 = Send Status
+ C<D
+
+80 = Send Data and Status ??
+81 = Received Data and Status ??
+82 = Set Manual Override
+83 = Clr Manual Override
+84 = Set TZ Override
+85 = Clr TZ Override
+86 = Set Emerg Override
+87 = Clr Emerg Override
+88 = Deduct count 1
+89 = Deduct count 2
+
+
+
+
+------------------------------
+Attributes - 2 I/P, 2 O/P, 2 Temp
+------------------------------
+Type: 1
+Address: 2
+Hardware version: 1
+Software version:1
+Prog checksum: 2
+Relay1 Timer1: 2
+ b0-14 Value (max 16384)
+ b15-16 1=Milliseconds 1=Seconds 2=Minutes
+Relay1 Timer2: 2
+Relay2 Timer1: 2
+Relay1 Timer2: 2
+Relay Attributes: 1 (1 bit each relay)
+ b0-1 0=Norm off 1=Norm on
+ b2-3 Emerg override absolute 0=Off 1=On
+Relay Mode: 1 (1 nibble each relay)
+ v0=Monostable
+ v1=Bistable
+ v2=Bi-pulse
+
+Count 1 On Debounce: 1 (msecs)
+Count 1 Off Debounce: 1 (msecs)
+Count 1 On Min: 1 (msecs)
+Count 1 Off Min: 1 (msecs)
+Count 1 Max Freq: 2 (per sec)
+
+Count 2 On Debounce: 1 (msecs)
+Count 2 Off Debounce: 1 (msecs)
+Count 2 On Min: 1 (msecs)
+Count 2 Off Min: 1 (msecs)
+Count 2 Max Freq: 2 (per sec)
+
+Last Saved Count 1: 4
+Last Saved Count 2: 4
+Last Time on:
+Last Time off:
+
+Temp 1 Hi Alarm: 1 (degrees)
+Temp 1 Lo Alarm: 1 (degrees)
+
+Temp 1 Hi Alarm: 1 (degrees)
+Temp 1 Lo Alarm: 1 (degrees)
+
+
+------------------------------
+Status - 02 - 2 I/P, 2 O/P, 2 Temp
+------------------------------
+Last time set:
+Time since:
+Relay status: Logical, Absolute,  Man O/R, TZ O/R, Emerg O/R
+Counter 1:
+Counter 2:
+Temp 1:
+Temp 2:
+Comms Errors:
+
+
+------------------------------
+Events - 2 I/P, 2 O/P, 2 Temp (Max events?? Time Event Data)
+------------------------------
+Max count 1 freq exceeded
+Max count 2 freq exceeded
+Temp 1 Hi Temp
+Temp 2 Hi Temp
+Temp 1 Lo Temp
+Temp 2 Lo Temp
+
+===============================================================
+Msgs Required for Station Pier
+===============================================================
+--------------------
+90 = Send Status
+---------------------
+ C>D No data
+ C<D 0D bytes
+  Bytes 0-3: Counter0Value, MSByte first, LSByte last
+  Bytes 4-7: Counter1Value, MSByte first, LSByte last
+  Byte 8: Temp0
+  Byte 9: Temp1
+  Byte A: Bit0=Relay0Status
+   Bit1=Relay1Status
+                Byte B: Error Value
+                Byte C: ADC (Value Voltage * 5
+
+--------------------
+91 = Set Relay State
+---------------------
+ C>D 1 Byte
+  Byte 0:
+   Bit0: Relay number
+   Bit1: Relay status 0=Off,1=On
+ C<D No data
+
+
+--------------------
+92 = Decrement Counter Value
+---------------------
+ C>D 05 bytes
+  Byte 0: Counter Number
+  Bytes 1-4: Value to decrement, MSByte first, LSByte last
+ C<D No data
+
+
+--------------------
+93 = Load Counter Value
+---------------------
+ C>D 05 bytes
+  Byte 0: Counter Number
+  Bytes 1-4: Value to decrement, MSByte first, LSByte last
+ C<D No data
+
+
+
+
+
+
+
+
+
+------------------------------
+Events - 2 I/P, 2 O/P, 2 Temp (Max events?? Time Event Data)
+------------------------------
+
+
+
+=====================================
+Use Parity bit as special character flag????? Non-standard words.
+
+

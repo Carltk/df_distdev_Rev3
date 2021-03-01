@@ -1,0 +1,146 @@
+
+ToDo:
+    * Do I need a USB CDC ASM for Log messages?
+    * Do I need a BLE UART for Log messages?
+    * Do I need a CLI handler (over USB or BLE) for Service interogation
+
+
+
+CLI Handler:
+    * Flash 
+        - Read Status    
+        - Record deletion
+        - Garbage Collection
+    
+    * IO
+        - Enable Relay
+        - Read Pulses
+        - Read Nozzle
+    
+    * View Internal structures
+        - DDPC
+        - Pump
+        - Components
+    
+    * Set/Reset Memory
+        - Device Address
+
+
+**** DDPC Powerup sequence ****
+    1. DDPC can be defaulted with a powerup with mode button press
+    2. DDPC device has a unique <unknown address> blink pattern 
+    3. Console will try to communicate with registered DDPC devices (registration via ConDevs)    
+    4. If there are "missing" devices, Console will occasionally request address 0xFFFE with a payload containing 0xFF<unknown_index>
+    5. A new DDPC will power up with address 0xFFFE
+        5a. If it sees a request for 0xFFFF <message holdoff> times it will respond 
+            5a.1 It will compare Tx/Rx of its own transmission and restart if they are different
+            5a.2 If the Tx/Rx is OK it will set its address to 0xFF<unknown_index>
+        5b. From then on the DDPC will answer to address 0xFF<unknown_index>
+    6. Console will create a tech menu list of <unknown> pumps or components
+    7. Technician then selects one device then lifts nozzle or presses mode button
+    8. Console then matches pump/component to 0xFF<unknown_index> and sets the appropriate real address (from ConDevs)
+
+
+    * The Console will have the ability to test intermediate (0xFF<unknown_index>) addresses with nozzle, relay and pulser tests
+    * 
+  
+
+
+Note:
+    * When DDPCs power up they will gnerate a message holdoff based on RNG
+        - seeded by:
+        ?? a count of messages received on the comms bus
+        ?? a true RNG?
+    * Address 0xFFFF is an all-device address. It can be used e.g to reset all devices back to factory default
+
+
+
+
+Console DDPC adoption
+    * Console needs to monitor whether it has all DDPC devices online
+    * If not, it will need to create prio messages for missing devices
+    * 
+
+
+Console - IntBus RS485 comms 
+    *  IntBus Comms services 1 device (KbdLCD) with status polls at ~48mS per poll (9600 baud)
+        * If there are 2 devices, each device is serviced at ~70mS per poll
+
+
+
+
+
+
+** nRF52840 hardware **
+https://infocenter.nordicsemi.com/topic/struct_nrf52/struct/nrf52.html?cp=4
+
+** nRF5 SDK **
+https://infocenter.nordicsemi.com/topic/struct_sdk/struct/sdk_nrf5_latest.html?cp=7_1
+
+** nRF52840 Dongle Programming Tutorial **
+https://devzone.nordicsemi.com/nordic/short-range-guides/b/getting-started/posts/nrf52840-dongle-programming-tutorial
+
+
+** Flash Writes **
+    - Flash Write (using FDS) takes ~670uS (22 ticks @33 ticks per mS)
+    - Garbage-collect takes 83mS (2739 ticks @33 ticks per mS)
+        
+
+
+
+** Boot Loader **
+    * https://devzone.nordicsemi.com/nordic/short-range-guides/b/getting-started/posts/nrf52840-dongle-programming-tutorial
+    * nRF52840 Dongle ships with Open USB Bootloader
+    * USB DFU Consists of:
+        - Master Boot Record (MBR)
+            - Flash Address 0-0xFFF, RAM (0x20000000 - 0x20000007)
+            - MBR is never updated by DFU 
+        - Open USB Bootloader
+            - Flash Address 0x000E0000-> 
+            - Bootloader can be updated by DFU
+            - Bootloader SIZE cannot be updated (safely) by DFU
+        - DFU Trigger Library 
+            - Can be incorporated as part of the application
+            - Without trigger library, device reset button must be used
+
+** Adapting sample applications for nRF52840 Dongle
+    - Application must be built so that Flash and RAM does not conflict with the MBR and Bootloader
+    - Do I need to provide a USB backend for logging for the project?
+        - Do I need to do a USB CLI?
+    - 
+
+
+
+
+** REGOUT0 **
+    * nRF_Dongle default mode
+        - The nRF_Dongle normally uses 1.8V internally, but this voltage is too low to be used with a nRF_DevKit. This will cause inability to (re)program the Dongle.
+        - An application loaded (and debugged) with the nRF_DevKit must reprogram REGOUT0 to 3V mode (see Main.dongle_psu_reg_init() in DistDev project)
+
+    
+     
+
+
+Adding Boards
+* Clone the project
+* Rename project (if required)
+* Edit ../config/boards/boards.c (if required)
+* Edit ../config/boards/boards.h
+* Create/clone_from_existing -> ../config/boards/<new_board_name>.h
+
+
+New Functions required for DDPC_Rev2
+* OR_SENSE - Analog read
+* MAG_SENSE handler (parallel to MODE_PB)
+* OUTPUT_EN - for 3.3V/5V level shifter
+* GPin/GPout handlers
+* POWER_GOOD - Interrupt and Panic save trigger 
+
+
+DDPC_Rev2 Board Notes
+  * Hardware mod required:
+    - Need an output connection to RESET for BOOTLOADER_PIN. This used to enable the Bootloader-call from code.
+      - Is there any way to modify the pcb to enable this?
+      - Perhaps a short from Pin42 (P0.19) to the via off Pin40 (RESET)
+      - Alternatively, the MagSense Output could be doubled onto Mode(PB) and Pin46(P0.22) coupled to RESET.
+
