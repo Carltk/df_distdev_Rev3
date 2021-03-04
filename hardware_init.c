@@ -21,7 +21,6 @@
 // local declarations
 ret_code_t df_inputs_init(void);
 ret_code_t df_relay_init(void);
-ret_code_t df_outbuf_init(void);
 ret_code_t df_bl_trigger_init(void);
 ret_code_t df_pulser_init(void);
 
@@ -52,10 +51,6 @@ ret_code_t df_hardware_init(void)
 
     APP_ERROR_CHECK(df_relay_init());               // Init the Ouput Relay
     NRFX_LOG_INFO("Relay Control - Initialised"); 
-
-    APP_ERROR_CHECK(df_outbuf_init());               // Init the Ouput Buffer
-    NRFX_LOG_INFO("Output Buffer Control - Initialised"); 
-
 
     APP_ERROR_CHECK(df_bl_trigger_init());          // Init the Bootloader-trigger
     NRFX_LOG_INFO("Bootloader Triger - Initialised"); 
@@ -231,32 +226,6 @@ void df_relay_change(uint32_t channel, uint8_t state)
     {   nrf_gpio_pin_set(chan);     }
 }
 
-// ***********************************************
-// *** Output Buffer control - simple GPIO output
-// The output Buffer Control is the OE pin of the 3V-5V level shifter and enables most I/O control.
-// in normal use it MUST be enabled (high)
-// ***********************************************
-ret_code_t df_outbuf_init(void)
-{   ret_code_t ret = NRFX_SUCCESS;
-
-    // Relay can be normal GPIO
-    df_gpio_cfg_output(OUTBUF_PIN, NRF_GPIO_PIN_S0H1);          // Configure the output buffer control output
-    df_outbuf_change(OUTBUF_PIN, 1);                            // Start with it turned off    
-
-    return(ret);
-}
-
-void df_outbuf_change(uint32_t channel, uint8_t state)
-{   
-    uint8_t chan = channel;
-    if (channel == 0) { chan = OUTBUF_PIN;   }
-
-    if (state)
-    {   nrf_gpio_pin_set(chan);     }    
-    else
-    {   nrf_gpio_pin_clear(chan);   }
-
-}
 
 // ***********************************************
 // ***** Pulser declarations & configuration *****

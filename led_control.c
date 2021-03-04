@@ -3,16 +3,24 @@
 #include "hardware_init.h"
 #include "app_timer.h"
 #include "nrfx_clock.h"
+#include "nrfx_i2s.h"
 
 #include "nrf_delay.h"
 
 #include "nrfx_log.h"
 
-#define LED_MS_PER_TICK     125
+#define LED_MS_PER_TICK 125                         // LED flash timer resolution = 125mS = 1/8 second
+#define RESET_BITS      6                           // Enough reset bits to output >50uS at 10uS per 32-bit buffer
+#define I2S_BUFFER_SIZE 3 + RESET_BITS              // i2s buffer is 3x colour channels + reset blocks
 
 // *** Global Variables ***
-led_control_t LEDS[NUM_LEDS];        // an array of LED control structures
 APP_TIMER_DEF(led_timer);                   // Timer definition
+static volatile bool g_i2s_start = true;
+static volatile bool g_i2s_running = false;
+
+static uint32_t m_buffer_tx[I2S_BUFFER_SIZE];
+static volatile int nled = 1;
+
 
 // *** function prototypes ***
 void set_all_masks(led_control_t *lc, uint32_t mask);
@@ -24,69 +32,79 @@ uint32_t roll_mask_n(uint32_t mask, uint8_t rollVal);
 uint32_t roll_mask(uint32_t mask);
 void lfclk_request(void);
 
+uint32_t calcChannelValue(uint8_t level);
+static void i2s_data_handler(uint32_t const * p_data_received, uint32_t * p_data_to_send, uint16_t number_of_words);
+
+proc_led_t procled[NUM_PROC_LED_SLOTS];      // An array of proc_led control slots
+uint8_t procled_index[NUM_PROC_LED_SLOTS];   // An array of pointers to the slots to allow for easier addition/deletion & reordering
+
+
+// This is the I2S data handler - all data exchange related to the I2S transfers is done here.
+void i2s_data_handler((nrfx_i2s_buffers_t const * p_released, uint32_t status)
+{       
+    if (status == NRFX_I2S_STATUS_NEXT_BUFFERS_NEEDED)
+    {   NRFX_LOG_INFO("TEST** i2s: Status Next Buffers Needed (finished?)");
+        nrfx_i2s_stop();        
+        g_i2s_running = false;
+    }      
+}
+
+// because of the way i2s encodes signals (i.e. Left/Right)
+uint32_t calcChannelValue(uint8_t level)
+{   uint32_t val = 0;
+    
+    if(level == 0)                 // 0 
+    {   val = 0x88888888;   }
+    else if (level == 255)         // 255
+    {   val = 0xeeeeeeee;  }
+    else                           // apply 4-bit 0xe HIGH pattern wherever level bits are 1. 
+    {   val = 0x88888888;
+        for (uint8_t i = 0; i < 8; i++) {
+            if((1 << i) & level) {
+                uint32_t mask = ~(0x0f << 4*i);
+                uint32_t patt = (0x0e << 4*i);
+                val = (val & mask) | patt;
+            }
+        }
+        val = (val >> 16) | (val << 16);        // swap 16 bits
+    }
+    return val;
+}
+
+void fillBuffers(uint8_t RVal, uint8_t GVal, uint8_t BVal)
+{   m_buffer_tx[0] = calcChannelVal(GVal);              // buffers hold GRB
+    m_buffer_tx[1] = calcChannelVal(RVal);
+    m_buffer_tx[2] = calcChannelVal(BVal);
+    
+    memset(&m_buffer_tx[3], 0x00, (4 * RESET_BITS));    // Clear 6 buffers from [3] onwards to make the >50uS reset pulse
+}
+
+ret_code_t sendLEDBlocks(procled_status_t * PL)
+{   ret_code_t ret;
+
+    if (!g_i2s_running)
+    {   ret = nrfx_i2s_start(m_buffer_tx, I2S_BUFFER_SIZE, 0);
+        APP_ERROR_CHECK(ret);
+        g_i2s_running = true;
+        fillBuffers(PL->colourVal[0], PL->colourVal[1], PL->colourVal[2]);
+    }
+}
+
+
+
+
+
+
+
+
 ret_code_t df_led_init()
 {
     ret_code_t ret = NRFX_SUCCESS;
     
     uint32_t newMask;
     uint8_t i;
-    
-    led_control_t lc = LED_CONTROL_INIT();                  // Build a led control stucture with default values
-    uint8_t led_list[NUM_LEDS] = LED_PIN_LIST;              // make an array of led pin assignments for use in building led control structures
-    
-    for (i = 0; i < NUM_LEDS; i++)                          // build the array of led_control structures with default values
-    {   lc.led_num = i;                                     // .. and insert the unique led num
-        lc.port_pin = led_list[i];                          // .. and pin assignment
-
-        if (i == RELAY_OUT)
-        {   lc.inverted = 0;    
-            df_gpio_cfg_output(lc.port_pin, NRF_GPIO_PIN_S0S1);   // Configure the port control pin    
-        }
-        else
-        {   lc.inverted = 1;        
-            // if (i == LED_HB)    df_led_cfg_output(lc.port_pin, NRF_GPIO_PIN_S0D1);      // Heartbeat
-            // else                df_led_cfg_output(lc.port_pin, NRF_GPIO_PIN_S0D1);      // Error
-
-            if (i == LED_HB)    df_gpio_cfg_output(lc.port_pin, NRF_GPIO_PIN_S0D1);      // Heartbeat
-            else                df_gpio_cfg_output(lc.port_pin, NRF_GPIO_PIN_S0D1);      // Error
-
-/*
-    xxx no NRF_GPIO_PIN_S0S1 = GPIO_PIN_CNF_DRIVE_S0S1, ///< !< Standard '0', standard '1'.
-    xxx no NRF_GPIO_PIN_H0S1 = GPIO_PIN_CNF_DRIVE_H0S1, ///< !< High-drive '0', standard '1'.
-    xxx no NRF_GPIO_PIN_S0H1 = GPIO_PIN_CNF_DRIVE_S0H1, ///< !< Standard '0', high-drive '1'.
-    xxx no NRF_GPIO_PIN_H0H1 = GPIO_PIN_CNF_DRIVE_H0H1, ///< !< High drive '0', high-drive '1'.
-    xxx no NRF_GPIO_PIN_D0S1 = GPIO_PIN_CNF_DRIVE_D0S1, ///< !< Disconnect '0' standard '1'.
-    xxx no NRF_GPIO_PIN_D0H1 = GPIO_PIN_CNF_DRIVE_D0H1, ///< !< Disconnect '0', high-drive '1'.
-    xxx no NRF_GPIO_PIN_S0D1 = GPIO_PIN_CNF_DRIVE_S0D1, ///< !< Standard '0', disconnect '1'.
-    NRF_GPIO_PIN_H0D1 = GPIO_PIN_CNF_DRIVE_H0D1, ///< !< High-drive '0', disconnect '1'.
-
-
-*/
-
-
-        }
-        
-        led_op_do(&lc, 0);                                   // & turn it off
-        LEDS[i] = lc;                                       // add the modified structure to the led control array
-    }    
-    
-    set_all_masks(&LEDS[LED_HB], LED_FLASH_SLOW);            // set the default value for the Heartbeat led into current and default masks                       
-    led_go(LED_HB, LED_FLASH_FAST, 10000);                  // initialise the HB_LED to fast-flash for 10Sec
-
-    set_all_masks(&LEDS[HB_ERR], LED_FLASH_OFF);            // set the default value for the Error led into current and default masks                       
-    led_go(HB_ERR, LED_FLASH_BLIP, 5000);                   // initialise the ERR_LED to fast-flash for 2Sec
-
-    set_all_masks(&LEDS[RELAY_OUT], LED_FLASH_OFF);         // set the default value for the Error led into current and default masks                       
-    led_go(RELAY_OUT, LED_FLASH_ON, 2000);                    // initialise the ERR_LED to fast-flash for 25ec
-
-
-/*    for (i=1; i<NUM_LEDS; i++)                              // initialise all other LEDs to non-synchronised sparse flash
-    {   newMask = roll_mask_n(LED_FLASH_SPARSE, (i*5));
-        led_go(i, newMask, 5000);      
-    }   */
 
     // This is done in main now ->   lfclk_request();                                        // request (init) a lfclk device for the app_timer configured for LED control
-
     // This is done in main/hardware_init now -> ret = app_timer_init();                                 // initialise the app_timer facility
 
     ret = app_timer_create(&led_timer, APP_TIMER_MODE_REPEATED, led_timer_handle);  // Create an AppTimer for the Led controller
@@ -97,9 +115,28 @@ ret_code_t df_led_init()
     if (ret != NRFX_SUCCESS) goto IL_x; 
     app_timer_resume();                                     // Ensure the RTC (source of AppTimer) is (re)started
 
+
+    memset(&procled, 0x00, sizeof(proc_led_t * NUM_PROC_LED_SLOTS));        // Clear the blink pattern array
+    memset(&procled_index, 0x00, sizeof(NUM_PROC_LED_SLOTS));               // Clear the pattern order indexing array
+
+    nrfx_i2s_config_t i2s_config = NRFX_I2S_DEFAULT_CONFIG;
+ 
+    i2s_config.sdout_pin = I2S_SDIN_PIN;
+    i2s_config.sdin_pin = I2S_SDOUT_PIN;
+    i2s_config.mck_setup = NRF_I2S_MCK_32MDIV10; ///< 32 MHz / 10 = 3.2 MHz.
+    i2s_config.ratio     = NRF_I2S_RATIO_32X;    ///< LRCK = MCK / 32.
+    i2s_config.channels  = NRF_I2S_CHANNELS_STEREO;
+
+    ret = nrfx_i2s_init(&i2s_config, (nrfx_i2s_data_handler_t)i2s_data_handler);
+
+    if (ret != NRFX_SUCCESS)
+    goto IL_x;
+    NRFX_LOG_INFO("i2s module initialised"); 
+
 IL_x:
     return(ret);
 }
+
 
 void led_timer_handle(void * p_context)
 {

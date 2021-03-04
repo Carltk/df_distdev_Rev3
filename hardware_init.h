@@ -8,18 +8,23 @@
 extern nrfx_timer_t pulse_counter;
 
 // *** Input Pins ***
-#define NOZZLE_PIN   NRF_GPIO_PIN_MAP(0,30)
-#define PULSER_PIN   NRF_GPIO_PIN_MAP(0,28)
-#define PSENSE_PIN   NRF_GPIO_PIN_MAP(1,10)         // !!! Need to init & an interrupt input processor (will trigger Panic_Save)
-#define GPIN_PIN     NRF_GPIO_PIN_MAP(0,31)         // !!! Need to init & handler (polled is OK)
+#define NOZZLE_PIN      NRF_GPIO_PIN_MAP(0,8)
+#define PULSER_PIN      NRF_GPIO_PIN_MAP(0,7)
+#define PSENSE_PIN      NRF_GPIO_PIN_MAP(1,13)         // !!! Need to init & an interrupt input processor (will trigger Panic_Save)
+#define GPIN_PIN        NRF_GPIO_PIN_MAP(0,06)         // !!! Need to init & handler (polled is OK)
 
 // *** Analog Pins ***
-#define OR_SENSE    NRF_GPIO_PIN_MAP(0,04)         // !!! Need to Analog init & a handler tied in to the Pump Control state machine
+#define OR_SENSE_1      NRF_GPIO_PIN_MAP(0,04)        // !!! Need to Analog init & a handler tied in to the Pump Control state machine
+#define OR_SENSE_2      NRF_GPIO_PIN_MAP(0,05)        // !!! Need to Analog init & a handler tied in to the Pump Control state machine
 
 // *** Output Pins ***
-#define OUTBUF_PIN   NRF_GPIO_PIN_MAP(0,27)         // Need to init & enable (will it ever be disabled?)    
-#define RELAY_PIN    NRF_GPIO_PIN_MAP(1,15)
-#define GPOUT_PIN    NRF_GPIO_PIN_MAP(0,29)         // !!! Need to init & handler (polled is OK)
+#define RELAY_PIN       NRF_GPIO_PIN_MAP(1,09)
+#define GPOUT_PIN       NRF_GPIO_PIN_MAP(0,02)         // !!! Need to init & handler (polled is OK)
+
+// *** Spare Pins ***
+#define SPARE_1_PIN     NRF_GPIO_PIN_MAP(1,15)       // Spare pins .. init as outputs
+#define SPARE_2_PIN     NRF_GPIO_PIN_MAP(0,03)
+#define SPARE_3_PIN     NRF_GPIO_PIN_MAP(0,29)
 
 
 // *** With Circuit board Mods - Piggyback Mag_Sense onto Mode_PB
@@ -27,33 +32,48 @@ extern nrfx_timer_t pulse_counter;
 //#define MAG_SENSE_PIN NRF_GPIO_PIN_MAP(0,20)
 //#define BOOTLOADER_PIN  NRF_GPIO_PIN_MAP(0,22)
 // *** No Circuit board Mods shorting under the processor module ()
-#define MODE_PB_PIN  NRF_GPIO_PIN_MAP(0,20)
-#define MAG_SENSE_PIN NRF_GPIO_PIN_MAP(0,22)        // !!! Need to init & handler - currently copy MODE_PIN
-#define BOOTLOADER_PIN  NRF_GPIO_PIN_MAP(0,19)      // Bootloader Pin is not connected .. USB trigger of bootloader won't work
+#define MODE_PB_PIN     NRF_GPIO_PIN_MAP(0,20)
+#define MAG_SENSE_PIN   NRF_GPIO_PIN_MAP(0,22)        // !!! Need to init & handler - currently copy MODE_PIN
+#define BOOTLOADER_PIN  NRF_GPIO_PIN_MAP(0,19)
 
 #define BSP_SELF_PINRESET_PIN BOOTLOADER_PIN
 
 // *** LED Configuration ***
+#define PROC_LED_PIN    NRF_GPIO_PIN_MAP(1,10)         // This is the I2S SDOUT pin
+
+// *** I2S Configuration (underpins the LED control) ***
+#define I2S_MCK_PIN     NRF_GPIO_PIN_MAP(1,03)         // Other i2s pins are unused .. assign them to the unused pins underneath the module
+#define I2S_SCK_PIN     NRF_GPIO_PIN_MAP(1,04)         // These are Module Pins 60, 56, 59, 57 i.e. the ones under the middle of the module 
+#define I2S_LRCK_PIN    NRF_GPIO_PIN_MAP(1,05)
+#define I2S_SDIN_PIN    NRF_GPIO_PIN_MAP(1,06)
+#define I2S_SDOUT_PIN   PROC_LED_PIN
+
 // Each LED color is considered a separate LED
-#define NUM_LEDS       3
+#define NUM_LEDS        3
 
-#define HB_PIN         NRF_GPIO_PIN_MAP(1,11) 
-#define HB_ERR_PIN     NRF_GPIO_PIN_MAP(1,12) 
+#define HB_PIN          NRF_GPIO_PIN_MAP(1,11) 
+#define HB_ERR_PIN      NRF_GPIO_PIN_MAP(1,12) 
 
-#define LED_HB        0       // Array indexes for the LEDs
-#define HB_ERR        1 
-#define RELAY_OUT     2 
+#define LED_HB          0       // Array indexes for the LEDs
+#define HB_ERR          1  
+#define RELAY_OUT       2 
 
 #define LED_PIN_LIST { HB_PIN, HB_ERR_PIN, RELAY_PIN}
 
-#define RX_PIN_NUMBER  NRF_GPIO_PIN_MAP(0,07)  
-#define TX_PIN_NUMBER  NRF_GPIO_PIN_MAP(0,26)
-#define TX_ENABLE      NRF_GPIO_PIN_MAP(0,05)       
+// *** Comms (Port 1) ***
+#define RX_PIN_NUMBER  NRF_GPIO_PIN_MAP(0,30)  
+#define TX_PIN_NUMBER  NRF_GPIO_PIN_MAP(0,28)
+#define TX_ENABLE      NRF_GPIO_PIN_MAP(0,31)       
+
+// *** Comms (Port 2) ***
+#define RX2_PIN_NUMBER  NRF_GPIO_PIN_MAP(0,13)  
+#define TX2_PIN_NUMBER  NRF_GPIO_PIN_MAP(0,15)
+
 
 // Need to check how to implement RS485 TxEnable signalling
 // https://devzone.nordicsemi.com/f/nordic-q-a/46911/rs485-transmit-enable
 
-#define CTS_PIN_NUMBER NRF_GPIO_PIN_MAP(0,02)    // set these to unused pins (flow control is off so the pins won't be used)
+#define CTS_PIN_NUMBER NRF_GPIO_PIN_MAP(1,01)    // set these to unused pins (flow control is off so the pins won't be used) 1.01 is Module Pin 61
 //#define RTS_PIN_NUMBER NRF_GPIO_PIN_MAP(0,15)    // is RTS enough to enable txEnable on rs485?
 #define RTS_PIN_NUMBER TX_ENABLE
 

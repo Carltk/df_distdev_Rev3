@@ -53,6 +53,9 @@
 #elif defined(BOARD_DDPC_REV2)
   #include "ddpc_rev2.h"
   #define BOARDS_WITH_USB_DFU_TRIGGER
+#elif defined(BOARD_DDPC_REV3)
+  #include "ddpc_rev3.h"
+  #define BOARDS_WITH_USB_DFU_TRIGGER
 #else
 #error "Board is not defined"
 #endif

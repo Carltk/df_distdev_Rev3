@@ -45,7 +45,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#if (defined(BOARD_PCA10059) || defined(BOARD_PCA10059_DF) || defined(BOARD_DDPC_REV2)) 
+#if (defined(BOARD_PCA10059) || defined(BOARD_PCA10059_DF) || defined(BOARD_DDPC_REV2) || defined(BOARD_DDPC_REV3)  ) 
 /**
  * Function for configuring UICR_REGOUT0 register
  * to set GPIO output voltage to 3.0V.
