@@ -78,6 +78,8 @@ typedef struct
 } proc_led_t;
 extern proc_led_t procled[NUM_PROC_LED_SLOTS];      // An array of proc_led control slots
 extern uint8_t procled_index[NUM_PROC_LED_SLOTS];   // An array of pointers to the slots to allow for easier addition/deletion & reordering
+extern uint8_t procled_current;                     // Variable to hold the index to procled_index[] that is currently being processes
+
 
 //TODO create a function to add new packets to the array
 //TODO create a function to reorganise the procled_index array based on packets being added/removed
