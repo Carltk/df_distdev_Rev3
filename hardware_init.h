@@ -11,19 +11,19 @@ extern nrfx_timer_t pulse_counter;
 #define NOZZLE_PIN      NRF_GPIO_PIN_MAP(0,8)
 #define PULSER_PIN      NRF_GPIO_PIN_MAP(0,7)
 #define PSENSE_PIN      NRF_GPIO_PIN_MAP(1,13)         // !!! Need to init & an interrupt input processor (will trigger Panic_Save)
-#define GPIN_PIN        NRF_GPIO_PIN_MAP(0,06)         // !!! Need to init & handler (polled is OK)
+#define GPIN_PIN        NRF_GPIO_PIN_MAP(0,6)         // !!! Need to init & handler (polled is OK)
 
 // *** Analog Pins ***
-#define OR_SENSE_1      NRF_GPIO_PIN_MAP(0,04)        // !!! Need to Analog init & a handler tied in to the Pump Control state machine
-#define OR_SENSE_2      NRF_GPIO_PIN_MAP(0,05)        // !!! Need to Analog init & a handler tied in to the Pump Control state machine
+#define OR_SENSE_1      NRF_GPIO_PIN_MAP(0,4)        // !!! Need to Analog init & a handler tied in to the Pump Control state machine
+#define OR_SENSE_2      NRF_GPIO_PIN_MAP(0,5)        // !!! Need to Analog init & a handler tied in to the Pump Control state machine
 
 // *** Output Pins ***
-#define RELAY_PIN       NRF_GPIO_PIN_MAP(1,09)
-#define GPOUT_PIN       NRF_GPIO_PIN_MAP(0,02)         // !!! Need to init & handler (polled is OK)
+#define RELAY_PIN       NRF_GPIO_PIN_MAP(1,9)
+#define GPOUT_PIN       NRF_GPIO_PIN_MAP(0,2)         // !!! Need to init & handler (polled is OK)
 
 // *** Spare Pins ***
 #define SPARE_1_PIN     NRF_GPIO_PIN_MAP(1,15)       // Spare pins .. init as outputs
-#define SPARE_2_PIN     NRF_GPIO_PIN_MAP(0,03)
+#define SPARE_2_PIN     NRF_GPIO_PIN_MAP(0,3)
 #define SPARE_3_PIN     NRF_GPIO_PIN_MAP(0,29)
 
 
@@ -42,10 +42,10 @@ extern nrfx_timer_t pulse_counter;
 #define PROC_LED_PIN    NRF_GPIO_PIN_MAP(1,10)         // This is the I2S SDOUT pin
 
 // *** I2S Configuration (underpins the LED control) ***
-#define I2S_MCK_PIN     NRF_GPIO_PIN_MAP(1,03)         // Other i2s pins are unused .. assign them to the unused pins underneath the module
-#define I2S_SCK_PIN     NRF_GPIO_PIN_MAP(1,04)         // These are Module Pins 60, 56, 59, 57 i.e. the ones under the middle of the module 
-#define I2S_LRCK_PIN    NRF_GPIO_PIN_MAP(1,05)
-#define I2S_SDIN_PIN    NRF_GPIO_PIN_MAP(1,06)
+#define I2S_MCK_PIN     NRF_GPIO_PIN_MAP(1,3)         // Other i2s pins are unused .. assign them to the unused pins underneath the module
+#define I2S_SCK_PIN     NRF_GPIO_PIN_MAP(1,4)         // These are Module Pins 60, 56, 59, 57 i.e. the ones under the middle of the module 
+#define I2S_LRCK_PIN    NRF_GPIO_PIN_MAP(1,5)
+#define I2S_SDIN_PIN    NRF_GPIO_PIN_MAP(1,6)
 #define I2S_SDOUT_PIN   PROC_LED_PIN
 
 // Each LED color is considered a separate LED

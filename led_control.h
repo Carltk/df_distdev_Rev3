@@ -35,16 +35,18 @@ This is controlled by a stack of data structures
 
 */
 
-#define NUM_PROC_LED_SLOTS 20           // The number of Processor LED control slots. Display routine will cycle through these slots if they are filled
+#define NUM_PROC_LED_SLOTS  20           // The number of Processor LED control slots. Display routine will cycle through these slots if they are filled
+#define NUM_COLOURS         3
+#define BYTES_IN_UINT32     4
 
-#define PROC_LED_RED        {255,0,0}       // Red used for Error status
-#define PROC_LED_GREEN      {0,255,0}       // Green used for OK status    
+uint8_t PROC_LED_RED[]     = {255,0,0};       // Red used for Error status
+uint8_t PROC_LED_GREEN[]   = {0,255,0};       // Green used for OK status    
 
-#define PROC_LED_ORANGE     {255,128,0}     // Orange used for "Transaction" indication
-#define PROC_LED_YELLOW     {255,255,0}     // Yellow used for pushbutton timing indication
-#define PROC_LED_CYAN       {0,255,255}     // Cyan used for "Comms" indication
-#define PROC_LED_BLUE       {0,0,255}       
-#define PROC_LED_MAGENTA    {255,0,255}     // Magenta used for "Memory" indication
+uint8_t PROC_LED_ORANGE[]  = {255,128,0};     // Orange used for "Transaction" indication
+uint8_t PROC_LED_YELLOW[]  = {255,255,0};     // Yellow used for pushbutton timing indication
+uint8_t PROC_LED_CYAN[]    = {0,255,255};     // Cyan used for "Comms" indication
+uint8_t PROC_LED_BLUE[]    = {0,0,255};       
+uint8_t PROC_LED_MAGENTA[] = {255,0,255};     // Magenta used for "Memory" indication
 
 typedef enum LED_FLASH
 {   LED_FLASH_OFF =     0x00000000,
@@ -58,32 +60,27 @@ typedef enum LED_FLASH
 
 typedef struct
 {
-    uint32_t flashPatternStatus;   // Current rolling value of the flahsPattern each iteration rolls through this value    
+    uint32_t rolledFlashPattern;   // Current rolling value of the flahsPattern each iteration rolls through this value    
     uint8_t cycleDwellCount;       // Countdown for the cycle dwell countdown (at 0 rolls on to the next slot) 
     uint8_t slotTimeLeft;          // Countdown for the slot timeout (at 0 the slot is deleted) 
-    
-    
 } procled_status_t;
 
+
+
 typedef struct
-{   uint8_t colourVal[3];           // Colour value array as [Red,Green,Blue]
+{   bool inUse;
+    uint8_t colourVal[NUM_COLOURS];           // Colour value array as [Red,Green,Blue]
 
     uint32_t flashPattern;          // Flash pattern allows control over the display pattern. Each bit represents 1/8 second.
     uint8_t  cycleDwell;            // Count of how long (in 1/8 sec increments) to remain in this slot before yielding to the next slot
     uint32_t slotTimeout;           
 
+    uint8_t  linkNext;              // index of the next structure (0xFF to just use index-next)
 
     procled_status_t status;        // Status of this procled slot
-
 } proc_led_t;
 extern proc_led_t procled[NUM_PROC_LED_SLOTS];      // An array of proc_led control slots
-extern uint8_t procled_index[NUM_PROC_LED_SLOTS];   // An array of pointers to the slots to allow for easier addition/deletion & reordering
 extern uint8_t procled_current;                     // Variable to hold the index to procled_index[] that is currently being processes
-
-
-//TODO create a function to add new packets to the array
-//TODO create a function to reorganise the procled_index array based on packets being added/removed
-//TODO create a function to remove packets from the array
 
 
 #define PROCLED_OK_DEFAULT              \
@@ -91,13 +88,11 @@ extern uint8_t procled_current;                     // Variable to hold the inde
     .flashPattern = LED_FLASH_MED,      \
     .cycleDwell = 16,                   \
     .slotTimeout = 0,                   \
-    .status.flashPatternStatus = 0,     \
+    .linkNext = 0xFF,                   \
+    .status.rolledFlashPattern = 0,     \
     .status.cycleDwellCount = 0,        \
     .status.slotTimeout = 0,            \
 }
-
-
-
 
 
 /**
@@ -107,26 +102,26 @@ extern uint8_t procled_current;                     // Variable to hold the inde
 ret_code_t df_led_init(void);
 
 /**
- * @brief Function to start an LED flash pattern
+ * @brief Function to add an LED flash pattern to the stack
  *
- * @param[in] led - the number (or name) of the LED
- * @param[in] controlmask - the flash pattern mask for the led use one of LED_FLASH_<xxx>
- * @param[in] timeout - the timeout for this pattern in mSec
+ * @param[in] colourAry - an array of RGB for the colour of the LED
+ * @param[in] flashPattern - the flash pattern mask for the led use one of LED_FLASH_<xxx>
+ * @param[in] cycleDwell - how many 1/8 time slices to stay before moving to the next pattern
+ * @param[in] slotTimeout - how many 1/8 time slices to exist before automatic deletion of the slot
+ * @param[in] link - index into the procled[] array to service next once this slot's cycleDwell times out
+ * @param[out] thisSlot - the slot in the procled[] array that this data was stored in
  *
  */
-void led_go(uint32_t controlmask, uint32_t timeout_ms);
+uint8_t addLEDPattern(uint8_t * colourAry, uint32_t flashPattern, uint8_t cycleDwell, uint8_t slotTimeout, uint8_t link);
+
 
 /**
- * @brief Function to stop an LED flash pattern and turn off the LED
- * @param[in] led - the number (or name) of the LED
- */
-void led_stop();
-
-/**
- * @brief Function to emit a single 1/8th second blip from the LED
- * @param[in] led - the number (or name) of the LED
- */
-void led_single_blip();
+ * @brief Function to create a LED flash pattern closed loop
+ *
+ * @param[in] startIdx - the procled[] index at the start of the loop 
+ * @param[in] endIdx - the procled[] index at the end of the loop
+*/
+void loopLEDPattern(uint8_t startIdx, uint8_t endIdx);
 
 
 #endif // DF_LED_CONTROL_H__

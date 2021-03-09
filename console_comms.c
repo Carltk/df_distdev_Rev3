@@ -309,7 +309,7 @@ void interpret_msg(msg_data_t *md)
     uint8_t char_cnt;
     bool send_resp = false;
     uint8_t comp_type = (md->msg_buf[MSGBUF_TYPE] - DEV_TYPE_PUMP);
-    uint8_t c;
+    uint8_t a, c;
 
     #define MSG_PREAMBLE 4    
 
@@ -381,9 +381,14 @@ void interpret_msg(msg_data_t *md)
             break;
         case FD_CMD_IDENT:
             if (buf[MSGBUF_PAYLOAD] & IDENT_LED)
-            {    led_go(HB_ERR, LED_FLASH_MED, 10000);  }
+            {   a = addLEDPattern(PROC_LED_RED, LED_FLASH_MED, 8, 32, 0xFF);
+                c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_MED, 8, 32, a);
+                c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_MED, 8, 32, c);
+                loopLEDPattern(a, c);
+            }
+
             if (buf[MSGBUF_PAYLOAD] & IDENT_RELAY)
-            {   led_go(RELAY_OUT, LED_FLASH_ON, 5000);      }
+            {         }
             break;     
         case FD_CMD_ACTION:
             c = handle_action_cmd(md, &buf[char_cnt]);        // act on the command (return val is the size of the reply msg (0 for no reply))

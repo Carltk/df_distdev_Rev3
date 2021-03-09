@@ -19,31 +19,24 @@ static volatile bool g_i2s_start = true;
 static volatile bool g_i2s_running = false;
 
 proc_led_t procled[NUM_PROC_LED_SLOTS];      // An array of proc_led control slots
-uint8_t procled_index[NUM_PROC_LED_SLOTS];   // An array of pointers to the slots to allow for easier addition/deletion & reordering
-uint8_t procled_current;                     // Variable to hold the index to procled_index[] that is currently being processes
+uint8_t procled_current;                     // Variable to hold currently processed procled array index
 
 static uint32_t m_buffer_tx[I2S_BUFFER_SIZE];
 
 
 // *** function prototypes ***
-void set_all_masks(led_control_t *lc, uint32_t mask);
 void led_timer_handle(void * p_context);
-uint8_t update_led_output(led_control_t *lc);
-void led_start_fn(led_control_t *lc);
-void led_running_fn(led_control_t *lc);
-uint32_t roll_mask_n(uint32_t mask, uint8_t rollVal);
-uint32_t roll_mask(uint32_t mask);
-void lfclk_request(void);
+bool roll_mask(uint32_t * mask);
 
-uint32_t calcChannelValue(uint8_t level);
-nrfx_i2s_data_handler_t i2s_data_handler((nrfx_i2s_buffers_t const * p_released, uint32_t status);
+uint32_t calcChannelVal(uint8_t level);
+//nrfx_i2s_data_handler_t i2s_data_handler((nrfx_i2s_buffers_t const * p_released, uint32_t status);
+void i2s_data_handler(nrfx_i2s_buffers_t const * p_released, uint32_t status);
 
-void setDefaultLEDState(bool startupMode, bool clearAll);
-
+void setDefaultLEDState();
 
 
 // This is the I2S data handler - all data exchange related to the I2S transfers is done here.
-nrfx_i2s_data_handler_t i2s_data_handler((nrfx_i2s_buffers_t const * p_released, uint32_t status)
+void i2s_data_handler(nrfx_i2s_buffers_t const * p_released, uint32_t status)
 {   if (status == NRFX_I2S_STATUS_NEXT_BUFFERS_NEEDED)
     {   NRFX_LOG_INFO("TEST** i2s: Status Next Buffers Needed (finished?)");
         nrfx_i2s_stop();        
@@ -52,7 +45,7 @@ nrfx_i2s_data_handler_t i2s_data_handler((nrfx_i2s_buffers_t const * p_released,
 }
 
 // because of the way i2s encodes signals (i.e. Left/Right)
-uint32_t calcChannelValue(uint8_t level)
+uint32_t calcChannelVal(uint8_t level)
 {   uint32_t val = 0;
     
     if(level == 0)                 // 0 
@@ -82,14 +75,14 @@ void fillBuffers(uint8_t RVal, uint8_t GVal, uint8_t BVal)
     memset(&m_buffer_tx[3], 0x00, (4 * RESET_BITS));    // Clear 6 buffers from [3] onwards to make the >50uS reset pulse
 }
 
-ret_code_t sendLEDBlocks(procled_status_t * PL)
-{   ret_code_t ret;
+ret_code_t sendLEDBlocks(proc_led_t * PL, bool ledState)
+{   
 
     if (!g_i2s_running)
-    {   ret = nrfx_i2s_start(m_buffer_tx, I2S_BUFFER_SIZE, 0);
-        APP_ERROR_CHECK(ret);
+    {   fillBuffers(PL->colourVal[0], PL->colourVal[1], PL->colourVal[2]);
+        APP_ERROR_CHECK(nrfx_i2s_start((nrfx_i2s_buffers_t)m_buffer_tx, I2S_BUFFER_SIZE, 0));
         g_i2s_running = true;
-        fillBuffers(PL->colourVal[0], PL->colourVal[1], PL->colourVal[2]);
+        
     }
 }
 
@@ -123,205 +116,125 @@ ret_code_t df_led_init()
     goto IL_x;
     NRFX_LOG_INFO("i2s module initialised"); 
 
-    setDefaultLEDState(true, true);                   // Set up the initial flash state
+    setDefaultLEDState();                   // Set up the initial flash state
 
 IL_x:
     return(ret);
 }
 
-void setDefaultLEDState(bool startupMode, bool clearAll)
-{
-    if (clearAll)
-    {   memset(&procled, 0x00, sizeof(proc_led_t * NUM_PROC_LED_SLOTS));                // Clear the blink pattern array
-        memset(&procled_index, 0xFF, sizeof(NUM_PROC_LED_SLOTS));                       // Clear the pattern order indexing array
-    }
-
-    if (startuptMode)       // startupMode - Make the rainbox startup flash
-    {   addLEDPattern(PROC_LED_RED, LED_FLASH.LED_FLASH_ON, 2, 2);      // Red, ON, dwell=2/8S, delete=2/8S
-        addLEDPattern(PROC_LED_ORANGE, LED_FLASH.LED_FLASH_ON, 2, 2);
-        addLEDPattern(PROC_LED_YELLOW, LED_FLASH.LED_FLASH_ON, 2, 2);
-        addLEDPattern(PROC_LED_GREEN, LED_FLASH.LED_FLASH_ON, 2, 2); 
-        addLEDPattern(PROC_LED_CYAN, LED_FLASH.LED_FLASH_ON, 2, 2);  
-        addLEDPattern(PROC_LED_BLUE, LED_FLASH.LED_FLASH_ON, 2, 2);  
-        addLEDPattern(PROC_LED_MAGENTA, LED_FLASH.LED_FLASH_ON, 2, 2);
-    }
+void setLEDOK(bool onlyOK)
+{   if (onlyOK)
+    {   memset(&procled, 0x00, (sizeof(proc_led_t) * NUM_PROC_LED_SLOTS));    }       // Clear the blink pattern array
     
-    addLEDPattern(PROC_LED_GREEN, LED_FLASH.LED_FLASH_MEDIUM, 16, 0xFF);     // Green 0.5S ON, 0.5S OFF. cycle every 2S, Never timeout 
-    procled_current = 0;
+    addLEDPattern(PROC_LED_GREEN, LED_FLASH_MED, 16, 0xFF, 0xFF);      // Green 0.5S ON, 0.5S OFF. cycle every 2S, Never timeout, link next 
 }
 
-bool addLEDPattern(uint8_t * colourAry, uint32_t flashPattern, uint8_t cycleDwell, uint8_t slotTimeout)
-{   // Add a new LED patter to the stack 
+
+void setDefaultLEDState()
+{   uint8_t nextLED;
+    uint8_t lastLED;
+
+    setLEDOK(true);
+
+    // add patterns backwards to capture the nextLink
+    nextLED = addLEDPattern(PROC_LED_MAGENTA, LED_FLASH_ON, 2, 2, 0xFF);
+    nextLED = addLEDPattern(PROC_LED_BLUE, LED_FLASH_ON, 2, 2, nextLED);  
+    nextLED = addLEDPattern(PROC_LED_CYAN, LED_FLASH_ON, 2, 2, nextLED);  
+    nextLED = addLEDPattern(PROC_LED_GREEN, LED_FLASH_ON, 2, 2, nextLED); 
+    nextLED = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_ON, 2, 2, nextLED);
+    nextLED = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_ON, 2, 2, nextLED);
+    nextLED = addLEDPattern(PROC_LED_RED, LED_FLASH_ON, 2, 2, nextLED);      // Red, ON, dwell=2/8S, delete=2/8S
+    procled_current = nextLED;                                                          // Start the Red flash
+}
+
+uint8_t addLEDPattern(uint8_t * colourAry, uint32_t flashPattern, uint8_t cycleDwell, uint8_t slotTimeout, uint8_t link)
+{   // Add a new LED pattern to a blank slot in the stack 
     uint8_t i;
+    uint8_t thisSlot = 0xFF;
+    proc_led_t * PL;
     
-    for (i=0;i<NUM_PROC_LED_SLOTS;i++)
-    {   if (procled_index[i])
-        {
-            
+    for (i=0;i<NUM_PROC_LED_SLOTS;i++)  
+    {   if (!procled[i].inUse)                  // find and unused slot
+        {   PL = &procled[i];
+            memcpy(&PL->colourVal, colourAry, (NUM_COLOURS * BYTES_IN_UINT32));
 
-
-
+            PL->flashPattern = flashPattern;
+            PL->status.rolledFlashPattern = flashPattern;
+            PL->cycleDwell = cycleDwell;      
+            PL->status.cycleDwellCount = cycleDwell;       
+            PL->slotTimeout= slotTimeout;           
+            PL->status.slotTimeLeft = slotTimeout;         
+            PL->linkNext = link;              
+            PL->inUse = true;
+            thisSlot = i;                       // return the index of this slot
         }
-
-
-
     }
-
-
-
-
-
+    return(thisSlot);
 }
 
+void loopLEDPattern(uint8_t startIdx, uint8_t endIdx)
+{   procled[startIdx].linkNext = endIdx;    
+    procled_current = startIdx;
+}
+
+uint8_t clearLEDSlot(proc_led_t * PL)
+{   uint8_t linkNext = PL->linkNext;
+    
+    memset(PL, 0x00, sizeof(proc_led_t));
+    PL->inUse = false;
+    return(linkNext);
+}
 
 void led_timer_handle(void * p_context)
-{    proc_led_t *PL;   
+{   proc_led_t *PL;   
+    uint8_t i;
+    uint8_t unusedCnt=0;
+    bool ledState;
 
     UNUSED_PARAMETER(p_context);
 
-    for (uint8_t i; i < NUM_LEDS; i++)          // Loop around all the led control blocks
-    {   
-        if (procled_index[i] != 0xFF)           // find the next 
-        {   
-            PL =  
+    for (i=procled_current;i<NUM_PROC_LED_SLOTS;i++)
+    {
+        if (procled[i].inUse)    
+        {   PL = &procled[i];
 
-        
-        
-        NUM_PROC_LED_SLOTS
-        
-        lc = &LEDS[i];
-        
-        switch (lc->led_state.led_state)
-        {
-            case LED_STATE_IDLE:                // LED idle ..nothing to do
-                break;
-            case LED_STATE_INIT:                // LED initialised .. start counting 
-                led_start_fn(lc);
-                break;
-            case LED_STATE_RUNNING:             // LED running .. count & move
-                led_running_fn(lc);
-                break;
-            case LED_STATE_FINISHED:            // LED finished .. clear & go back to default state
-                break;
-            default:                            // something else .. something has gone wrong .. do a cleanup like finished
-                break;
-        }
-    }
-}
+            ledState = roll_mask(&PL->status.rolledFlashPattern);   // roll the flash pattern
+            sendLEDBlocks(PL, ledState);                            // send the colour code (or dark) out the i2s to the LED
 
-void led_start_fn(led_control_t *lc)
-{   // called on the first timer tick after a LED output has been enabled
-    lc->led_state.current_mask = lc->control_mask;              // move the required mask into the current state
-    lc->led_state.countdown = lc->timeout / LED_MS_PER_TICK;    // convert timeout (ms) to 1/8 sec ticks
-    lc->led_state.led_on_off = update_led_output(lc);
-    lc->led_state.led_state = LED_STATE_RUNNING;                // Set the new state to running
-}
-
-void led_running_fn(led_control_t *lc)
-{   // called every timer tick when an LED is in a running state
-    
-    if (lc->single_tick)                                            // if a single-tick has been flagged
-    {   led_op_do(lc, lc->led_state.led_on_off);
-        lc->led_state.led_on_off ^= 1;       
-        lc->single_tick = 0;                                        // disable the flag
-        return;
-    }
-
-    if (lc->led_state.countdown)                                    // LED timer is running
-    {   lc->led_state.countdown -= 1;                               // .. decrement it
-        if (lc->led_state.countdown)                                // check if this is a timeout
-        {   lc->led_state.led_on_off = update_led_output(lc);  }     // still running .. send the output
-        else                                                        // Timed out
-        {   led_op_do(lc, 0);                                       // .. turn off the led
-
-            if (lc->control_mask_dflt)                              // check if there is a default value
-            {   lc->led_state.countdown = 0;                        // .. there is a default state .. set it to run forever
-                lc->control_mask = lc->control_mask_dflt;           // .. move the default mask into the current mask
-                lc->led_state.led_state = LED_STATE_INIT;           // .. set to call the init function
+            if (PL->status.slotTimeLeft != 0xFF)                     // Check to see if this is an expireable slot
+            {   PL->status.slotTimeLeft -= 1;                        // decrement its counter
+                if (PL->status.slotTimeLeft == 0)                    // if it reaches 0
+                {   procled_current = clearLEDSlot(PL);             // delete the slot
+                    return;       
+                }
             }
-            else                                                    // no default mask set
-            {   lc->led_state.led_state = LED_STATE_IDLE;    }      // Set the new state to idle
+
+            PL->status.cycleDwellCount -= 1;                        // Check to see if we've timed out this colour
+            if (PL->status.cycleDwellCount == 0)                    // yes?
+            {   PL->status.cycleDwellCount = PL->cycleDwell;        // reset the cycle dwell counter
+                
+                if (PL->linkNext != 0xFF)                           // see if we have a next-slot-link
+                {   procled_current = PL->linkNext; }               // if so, set up the jump for next timer handler
+                else
+                {   procled_current = i+1;  }                       // No next-slot-link .. set up for next slot in the stack
+            }
+            
+            return;       
         }
+        unusedCnt+=1;
     }
-    else                                                            // LED timer is 0 .. i.e. run forever
-    {   lc->led_state.led_on_off = update_led_output(lc);   }
+    if (procled_current >= NUM_PROC_LED_SLOTS) procled_current = 0;
+    if (unusedCnt >= NUM_PROC_LED_SLOTS) setLEDOK(true);            // if there are no active slots, reinit to OK green flash
 }
 
-uint8_t update_led_output(led_control_t *lc)
-{   
-    lc->led_state.current_mask = roll_mask(lc->led_state.current_mask);
-
-    uint8_t next_bit = (char)(lc->led_state.current_mask & 0x00000001);
-
-    if (lc->led_state.led_on_off != next_bit)                        // if the state of the bit has changed 
-    {   led_op_do(lc, next_bit);    }
-
-    return next_bit;
-}
-
-
-uint32_t roll_mask_n(uint32_t mask, uint8_t rollVal)
-{   uint32_t tempMask = mask;
-
-    for (uint8_t i=0; i<rollVal; i++)
-    {   tempMask = roll_mask(tempMask);     }
-
-    return(tempMask);
-}
-
-uint32_t roll_mask(uint32_t mask)
+bool roll_mask(uint32_t * mask)
 {   uint8_t shifted_bit;
 
-    shifted_bit = (char)mask & 0x00000001;          // get the lsbit
-    mask >>= 1;                                     // shift down the mask
-    mask |= (shifted_bit ? 0x80000000 : 0L);        // roll the shifted bit up to the msbit
+    shifted_bit = (char)(*mask & 0x00000001);               // get the lsbit
+    *mask >>= 1;                                     // shift down the mask
+    *mask |= (shifted_bit ? 0x80000000 : 0L);        // roll the shifted bit up to the msbit
 
-    return(mask);
-}
-
-void set_all_masks(led_control_t *lc, uint32_t mask)
-{   lc->control_mask = mask;
-    lc->control_mask_dflt = mask;
-}
-
-void led_control_handler()
-{   } // function to parse the led_control_t structures and move them on (if reqauired)
-
-void led_go(uint8_t led, uint32_t controlmask, uint32_t timeout_ms)
-{
-    if (IS_IN_RANGE(led, 0, (NUM_LEDS - 1)))
-    {   led_control_t *lc = &LEDS[led];    
-        lc->control_mask = controlmask;             // set the control-pattern 
-        lc->timeout = timeout_ms;                   // time in milliseconds to run this pattern before going back to default
-        lc->led_state.led_state = LED_STATE_INIT;   // start up the state
-    }
-}
-
-void led_single_blip(uint8_t led)
-{
-    if (IS_IN_RANGE(led, 0, (NUM_LEDS - 1)))
-    {   led_control_t *lc = &LEDS[led];    
-        lc->led_state.led_state = LED_STATE_RUNNING;    // start up the state
-        lc->single_tick = 1;                            // Set flag to send a single tick to the LED
-    }
-}
-
-void led_op_do(led_control_t *lc, uint8_t state)
-{   if (state == 0xFF)
-    {   nrf_gpio_pin_toggle(lc->port_pin);  }
-    else if (state ^ lc->inverted)
-    {   nrf_gpio_pin_set(lc->port_pin);  }
-    else
-    {   nrf_gpio_pin_clear(lc->port_pin);  }
-}
-
-void led_stop(uint8_t led)
-{
-    if (IS_IN_RANGE(led, 0, (NUM_LEDS - 1)))
-    {   led_control_t *lc = &LEDS[led];    
-        lc->led_state.led_state = LED_STATE_IDLE;   // stop the state
-        led_op_do(lc, 0);                           // .. turn off the led
-    }        
+    return(shifted_bit);
 }
 
 
