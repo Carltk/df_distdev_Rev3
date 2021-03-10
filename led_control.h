@@ -4,7 +4,11 @@
 
 #include <stdint.h>
 #include "nrf_gpio.h"
+#include "app_timer.h"
+#include "nrfx_i2s.h"
+
 #include "hardware_init.h"
+
 
 /*
 * New LED controller uses the WS2812C - programmable RGB LED
@@ -39,14 +43,18 @@ This is controlled by a stack of data structures
 #define NUM_COLOURS         3
 #define BYTES_IN_UINT32     4
 
-uint8_t PROC_LED_RED[]     = {255,0,0};       // Red used for Error status
-uint8_t PROC_LED_GREEN[]   = {0,255,0};       // Green used for OK status    
+// extern nrfx_i2s_config_t i2s_config;
 
-uint8_t PROC_LED_ORANGE[]  = {255,128,0};     // Orange used for "Transaction" indication
-uint8_t PROC_LED_YELLOW[]  = {255,255,0};     // Yellow used for pushbutton timing indication
-uint8_t PROC_LED_CYAN[]    = {0,255,255};     // Cyan used for "Comms" indication
-uint8_t PROC_LED_BLUE[]    = {0,0,255};       
-uint8_t PROC_LED_MAGENTA[] = {255,0,255};     // Magenta used for "Memory" indication
+extern const uint8_t PROC_LED_RED[];
+extern const uint8_t PROC_LED_GREEN[];
+
+extern const uint8_t PROC_LED_ORANGE[];
+extern const uint8_t PROC_LED_YELLOW[];
+extern const uint8_t PROC_LED_CYAN[];
+extern const uint8_t PROC_LED_BLUE[];
+extern const uint8_t PROC_LED_MAGENTA[];
+extern const uint8_t PROC_LED_WHITE[];
+
 
 typedef enum LED_FLASH
 {   LED_FLASH_OFF =     0x00000000,
@@ -73,7 +81,7 @@ typedef struct
 
     uint32_t flashPattern;          // Flash pattern allows control over the display pattern. Each bit represents 1/8 second.
     uint8_t  cycleDwell;            // Count of how long (in 1/8 sec increments) to remain in this slot before yielding to the next slot
-    uint32_t slotTimeout;           
+    uint8_t slotTimeout;            // Count of how long before deleting itself (max = 255 / 8 =~ 30Sec) 
 
     uint8_t  linkNext;              // index of the next structure (0xFF to just use index-next)
 
@@ -101,6 +109,12 @@ extern uint8_t procled_current;                     // Variable to hold the inde
  */
 ret_code_t df_led_init(void);
 
+
+/**
+ * @brief Function to clear all LED pattern slots
+  */
+void wipeAllLEDSlots(void);
+
 /**
  * @brief Function to add an LED flash pattern to the stack
  *
@@ -112,16 +126,25 @@ ret_code_t df_led_init(void);
  * @param[out] thisSlot - the slot in the procled[] array that this data was stored in
  *
  */
-uint8_t addLEDPattern(uint8_t * colourAry, uint32_t flashPattern, uint8_t cycleDwell, uint8_t slotTimeout, uint8_t link);
+uint8_t addLEDPattern(const uint8_t * colourAry, uint32_t flashPattern, uint8_t cycleDwell, uint8_t slotTimeout, uint8_t link);
 
 
 /**
- * @brief Function to create a LED flash pattern closed loop
+ * @brief Function to create a LED flash pattern closed loop.
+ *   Looped slots must be added backwards i.e. last colour first
  *
- * @param[in] startIdx - the procled[] index at the start of the loop 
- * @param[in] endIdx - the procled[] index at the end of the loop
+ * @param[in] topIdx - the first procled[] index added (i.e. last in the pattern)
+ * @param[in] bottomIdx - the last procled[] index added (i.e. first in the pattern)
 */
-void loopLEDPattern(uint8_t startIdx, uint8_t endIdx);
+void loopLEDPattern(uint8_t topIdx, uint8_t bottomIdx);
+
+/**
+ * @brief Function to delete a LED flash pattern slot
+ *
+ * @param[in] PL - the procled[] slot to clear
+ * @param[out] linkNext - the value of the linkNext from the slot (or 0xFF if self-referenced or no linkNext)
+*/
+uint8_t clearLEDSlot(proc_led_t * PL);
 
 
 #endif // DF_LED_CONTROL_H__

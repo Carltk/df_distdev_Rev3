@@ -381,7 +381,7 @@ void interpret_msg(msg_data_t *md)
             break;
         case FD_CMD_IDENT:
             if (buf[MSGBUF_PAYLOAD] & IDENT_LED)
-            {   a = addLEDPattern(PROC_LED_RED, LED_FLASH_MED, 8, 32, 0xFF);
+            {   a = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_MED, 8, 32, 0xFF);
                 c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_MED, 8, 32, a);
                 c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_MED, 8, 32, c);
                 loopLEDPattern(a, c);

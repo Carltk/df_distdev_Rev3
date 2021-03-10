@@ -4,6 +4,7 @@
 #include "nrf_gpio.h"
 #include "nrfx_clock.h"
 #include "nrfx_timer.h"
+#include "nrfx_i2s.h"
 
 extern nrfx_timer_t pulse_counter;
 
@@ -42,10 +43,10 @@ extern nrfx_timer_t pulse_counter;
 #define PROC_LED_PIN    NRF_GPIO_PIN_MAP(1,10)         // This is the I2S SDOUT pin
 
 // *** I2S Configuration (underpins the LED control) ***
-#define I2S_MCK_PIN     NRF_GPIO_PIN_MAP(1,3)         // Other i2s pins are unused .. assign them to the unused pins underneath the module
-#define I2S_SCK_PIN     NRF_GPIO_PIN_MAP(1,4)         // These are Module Pins 60, 56, 59, 57 i.e. the ones under the middle of the module 
-#define I2S_LRCK_PIN    NRF_GPIO_PIN_MAP(1,5)
-#define I2S_SDIN_PIN    NRF_GPIO_PIN_MAP(1,6)
+#define I2S_MCK_PIN     NRFX_I2S_PIN_NOT_USED         // Other i2s pins are unused .. assign them to the unused pins underneath the module
+#define I2S_SCK_PIN     NRFX_I2S_PIN_NOT_USED         // These are Module Pins 60, 56, 59, 57 i.e. the ones under the middle of the module 
+#define I2S_LRCK_PIN    NRFX_I2S_PIN_NOT_USED
+#define I2S_SDIN_PIN    NRFX_I2S_PIN_NOT_USED
 #define I2S_SDOUT_PIN   PROC_LED_PIN
 
 // Each LED color is considered a separate LED
@@ -122,6 +123,7 @@ typedef struct
 } hardware_t;
 extern hardware_t hardware;
 
+extern uint8_t mode_button_LED;
 
 /**
  * @brief Function for initializing the Distributed Device Hardware.

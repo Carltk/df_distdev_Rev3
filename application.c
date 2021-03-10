@@ -137,8 +137,10 @@ void handle_push_button(void)
         switch (hardware.pushbutton_time[0] / 10)     // time is 100mS slices .. make seconds
         {
             case 0: case 1:                     // 0-2 seconds
-                led_go(LED_HB, LED_FLASH_OFF, 20000);        // Development Mode .. Generate some pulses on a medium button press                
-                led_go(HB_ERR, LED_FLASH_SLOW, 20000);        // Development Mode .. Generate some pulses on a medium button press
+                clearLEDSlot(&procled[mode_button_LED]); 
+                makeSysStatusFlashes();
+                
+                // Make the system status stack
                 
                 NRFX_LOG_INFO("Button pressed less than 2 seconds");           
                 break;
@@ -162,6 +164,16 @@ void handle_push_button(void)
     }
 }
 
+
+void makeSysStatusFlashes()
+{
+    wipeAllLEDSlots();
+
+
+
+
+
+}
 
 
 /**

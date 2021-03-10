@@ -14,15 +14,18 @@
 #define I2S_BUFFER_SIZE 3 + RESET_BITS              // i2s buffer is 3x colour channels + reset blocks
 
 // *** Global Variables ***
+
+bool i2s_start = true;
+
+bool i2s_running = false;
+
 APP_TIMER_DEF(led_timer);                   // Timer definition
-static volatile bool g_i2s_start = true;
-static volatile bool g_i2s_running = false;
 
 proc_led_t procled[NUM_PROC_LED_SLOTS];      // An array of proc_led control slots
 uint8_t procled_current;                     // Variable to hold currently processed procled array index
 
-static uint32_t m_buffer_tx[I2S_BUFFER_SIZE];
-
+uint32_t m_buffer_tx[I2S_BUFFER_SIZE];
+nrfx_i2s_config_t i2s_config = NRFX_I2S_DEFAULT_CONFIG;
 
 // *** function prototypes ***
 void led_timer_handle(void * p_context);
@@ -33,6 +36,18 @@ uint32_t calcChannelVal(uint8_t level);
 void i2s_data_handler(nrfx_i2s_buffers_t const * p_released, uint32_t status);
 
 void setDefaultLEDState();
+uint8_t LEDSlot(proc_led_t * PL);
+
+
+const uint8_t PROC_LED_RED[]     = {255,0,0};       // Red used for Error status
+const uint8_t PROC_LED_GREEN[]   = {0,255,0};       // Green used for OK status    
+
+const uint8_t PROC_LED_ORANGE[]  = {255,128,0};     // Orange used for "Transaction" indication
+const uint8_t PROC_LED_YELLOW[]  = {255,255,0};     // Yellow used for pushbutton timing indication
+const uint8_t PROC_LED_CYAN[]    = {0,255,255};     // Cyan used for "Comms" indication
+const uint8_t PROC_LED_BLUE[]    = {0,0,255};       
+const uint8_t PROC_LED_MAGENTA[] = {255,0,255};     // Magenta used for "Memory" indication
+const uint8_t PROC_LED_WHITE[]   = {128,128,128};   // White
 
 
 // This is the I2S data handler - all data exchange related to the I2S transfers is done here.
@@ -40,7 +55,7 @@ void i2s_data_handler(nrfx_i2s_buffers_t const * p_released, uint32_t status)
 {   if (status == NRFX_I2S_STATUS_NEXT_BUFFERS_NEEDED)
     {   NRFX_LOG_INFO("TEST** i2s: Status Next Buffers Needed (finished?)");
         nrfx_i2s_stop();        
-        g_i2s_running = false;
+        i2s_running = false;
     }      
 }
 
@@ -77,33 +92,27 @@ void fillBuffers(uint8_t RVal, uint8_t GVal, uint8_t BVal)
 
 ret_code_t sendLEDBlocks(proc_led_t * PL, bool ledState)
 {   
-
-    if (!g_i2s_running)
+    if (!i2s_running)
     {   fillBuffers(PL->colourVal[0], PL->colourVal[1], PL->colourVal[2]);
-        APP_ERROR_CHECK(nrfx_i2s_start((nrfx_i2s_buffers_t)m_buffer_tx, I2S_BUFFER_SIZE, 0));
-        g_i2s_running = true;
+        APP_ERROR_CHECK(nrfx_i2s_start((nrfx_i2s_buffers_t *)m_buffer_tx, I2S_BUFFER_SIZE, 0));
+        i2s_running = true;
         
     }
 }
 
-ret_code_t df_led_init()
+ret_code_t df_led_init(void)
 {   ret_code_t ret = NRFX_SUCCESS;
     
     uint32_t newMask;
     uint8_t i;
 
-    // This is done in main now ->   lfclk_request();                               // request (init) a lfclk device for the app_timer configured for LED control
-    // This is done in main/hardware_init now -> ret = app_timer_init();            // initialise the app_timer facility
+    // lfclk_request();             // This is done in main now                     // request (init) a lfclk device for the app_timer configured for LED control
+    // ret = app_timer_init();      // This is done in main/hardware_init now      // initialise the app_timer facility
 
     ret = app_timer_create(&led_timer, APP_TIMER_MODE_REPEATED, led_timer_handle);  // Create an AppTimer for the Led controller
     if (ret != NRFX_SUCCESS) goto IL_x;     
     NRFX_LOG_INFO("LED Control - app timer created");           
 
-    ret = app_timer_start(led_timer, APP_TIMER_TICKS(LED_MS_PER_TICK), NULL);       // Start the AppTimer
-    if (ret != NRFX_SUCCESS) goto IL_x; 
-    app_timer_resume();                                                             // Ensure the RTC (source of AppTimer) is (re)started
-
-    nrfx_i2s_config_t i2s_config = NRFX_I2S_DEFAULT_CONFIG;
     i2s_config.sdin_pin = I2S_SDIN_PIN;
     i2s_config.sdout_pin = I2S_SDOUT_PIN;
     i2s_config.mck_setup = NRF_I2S_MCK_32MDIV10;                                    // < 32 MHz / 10 = 3.2 MHz.
@@ -118,36 +127,45 @@ ret_code_t df_led_init()
 
     setDefaultLEDState();                   // Set up the initial flash state
 
+    ret = app_timer_start(led_timer, APP_TIMER_TICKS(LED_MS_PER_TICK), NULL);       // Start the AppTimer
+    if (ret != NRFX_SUCCESS) goto IL_x; 
+
+    app_timer_resume();                                                             // Ensure the RTC (source of AppTimer) is (re)started
+
 IL_x:
     return(ret);
 }
 
+void wipeAllLEDSlots(void)
+{   memset(&procled, 0x00, (sizeof(proc_led_t) * NUM_PROC_LED_SLOTS));  }
+
 void setLEDOK(bool onlyOK)
 {   if (onlyOK)
-    {   memset(&procled, 0x00, (sizeof(proc_led_t) * NUM_PROC_LED_SLOTS));    }       // Clear the blink pattern array
+    {   wipeAllLEDSlots();    }       // Clear the blink pattern array
     
     addLEDPattern(PROC_LED_GREEN, LED_FLASH_MED, 16, 0xFF, 0xFF);      // Green 0.5S ON, 0.5S OFF. cycle every 2S, Never timeout, link next 
 }
 
 
 void setDefaultLEDState()
-{   uint8_t nextLED;
-    uint8_t lastLED;
+{   uint8_t a, c;
 
-    setLEDOK(true);
+    wipeAllLEDSlots();
 
     // add patterns backwards to capture the nextLink
-    nextLED = addLEDPattern(PROC_LED_MAGENTA, LED_FLASH_ON, 2, 2, 0xFF);
-    nextLED = addLEDPattern(PROC_LED_BLUE, LED_FLASH_ON, 2, 2, nextLED);  
-    nextLED = addLEDPattern(PROC_LED_CYAN, LED_FLASH_ON, 2, 2, nextLED);  
-    nextLED = addLEDPattern(PROC_LED_GREEN, LED_FLASH_ON, 2, 2, nextLED); 
-    nextLED = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_ON, 2, 2, nextLED);
-    nextLED = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_ON, 2, 2, nextLED);
-    nextLED = addLEDPattern(PROC_LED_RED, LED_FLASH_ON, 2, 2, nextLED);      // Red, ON, dwell=2/8S, delete=2/8S
-    procled_current = nextLED;                                                          // Start the Red flash
+    a = addLEDPattern(PROC_LED_WHITE, LED_FLASH_OFF, 2, 2, 0xFF);   // Blank 
+    c = addLEDPattern(PROC_LED_MAGENTA, LED_FLASH_ON, 2, 4, a);
+    c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_ON, 2, 4, c);  
+    c = addLEDPattern(PROC_LED_CYAN, LED_FLASH_ON, 2, 4, c);  
+    c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_ON, 2, 4, c); 
+    c = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_ON, 2, 4, c);
+    c = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_ON, 2, 4, c);
+    c = addLEDPattern(PROC_LED_RED, LED_FLASH_ON, 2, 4, c);      // Red, ON, dwell=2/8S, delete=2/8S
+    
+    loopLEDPattern(a, c);
 }
 
-uint8_t addLEDPattern(uint8_t * colourAry, uint32_t flashPattern, uint8_t cycleDwell, uint8_t slotTimeout, uint8_t link)
+uint8_t addLEDPattern(const uint8_t * colourAry, uint32_t flashPattern, uint8_t cycleDwell, uint8_t slotTimeout, uint8_t link)
 {   // Add a new LED pattern to a blank slot in the stack 
     uint8_t i;
     uint8_t thisSlot = 0xFF;
@@ -156,7 +174,7 @@ uint8_t addLEDPattern(uint8_t * colourAry, uint32_t flashPattern, uint8_t cycleD
     for (i=0;i<NUM_PROC_LED_SLOTS;i++)  
     {   if (!procled[i].inUse)                  // find and unused slot
         {   PL = &procled[i];
-            memcpy(&PL->colourVal, colourAry, (NUM_COLOURS * BYTES_IN_UINT32));
+            memcpy(&PL->colourVal, colourAry, NUM_COLOURS);
 
             PL->flashPattern = flashPattern;
             PL->status.rolledFlashPattern = flashPattern;
@@ -167,21 +185,25 @@ uint8_t addLEDPattern(uint8_t * colourAry, uint32_t flashPattern, uint8_t cycleD
             PL->linkNext = link;              
             PL->inUse = true;
             thisSlot = i;                       // return the index of this slot
+            break;
         }
     }
     return(thisSlot);
 }
 
-void loopLEDPattern(uint8_t startIdx, uint8_t endIdx)
-{   procled[startIdx].linkNext = endIdx;    
-    procled_current = startIdx;
+void loopLEDPattern(uint8_t topIdx, uint8_t bottomIdx)
+{   procled[topIdx].linkNext = bottomIdx;    
+    procled_current = bottomIdx;
 }
 
+uint8_t LEDSlot(proc_led_t * PL)
+{   return(slotFromObject(PL, procled, sizeof(proc_led_t)));    }
+
 uint8_t clearLEDSlot(proc_led_t * PL)
-{   uint8_t linkNext = PL->linkNext;
+{   uint8_t linkNext = PL->linkNext;                // Save the Slot's linkNext attribute
+    memset(PL, 0x00, sizeof(proc_led_t));           // Wipe all bytes in the Slot
     
-    memset(PL, 0x00, sizeof(proc_led_t));
-    PL->inUse = false;
+    if (linkNext == LEDSlot(PL)) linkNext = 0xFF;   // Don't pass on the linkNext if it was pointing to itself
     return(linkNext);
 }
 

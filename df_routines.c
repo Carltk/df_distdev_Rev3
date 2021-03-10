@@ -49,3 +49,6 @@ char isInCharArray(uint8_t Val, uint8_t *Array, uint8_t ArySize)
     {   if (Array[i] == Val) {   return(1);    }    }
     return(0);
 }
+
+uint8_t slotFromObject(void * thisAddr, void * baseAddr, uint32_t size)
+{   return((thisAddr - baseAddr)/size);     }

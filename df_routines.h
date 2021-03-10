@@ -14,6 +14,7 @@ uint16_t buf2int(char *buf);
 void int2buf(char *buf, uint16_t val);
 void long2buf(char *buf, uint32_t val);
 char isInCharArray(uint8_t Val, uint8_t *Array, uint8_t ArySize);
+uint8_t slotFromObject(void * thisAddr, void * baseAddr, uint32_t size);
 
 /**
  * @brief A general purpose stub function for API calls that need an unused fn_handler
