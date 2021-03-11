@@ -143,8 +143,9 @@ void df_nozzle_handler(uint8_t pin_no, uint8_t button_action)
 void df_mode_handler(uint8_t pin_no, uint8_t button_action)
 {   
     if (button_action)
-    {   mode_button_LED = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_SLOW, 120, 120, 0xFF);     // Start a 1sec flash
+    {   mode_button_LED = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_SLOW, 120, 120, 0xFF);     // Start a 1sec flash in yellow
         loopLEDPattern(mode_button_LED, mode_button_LED);                                     // change the linkNext pointer to itself
+        ledNewValPoke();                                                                      // Force the new value into the LED display  
     }
     
     for (uint8_t i=0;i<NUM_PBS;i++)                         // The mode button handler is in the application timer handler so that different hold-times can be determined
@@ -196,9 +197,9 @@ void df_gpin_handler(uint8_t pin_no, uint8_t button_action)
 ret_code_t df_bl_trigger_init(void)
 {   ret_code_t ret = NRFX_SUCCESS;
 
-    // Relay can be normal GPIO
-    nrf_gpio_cfg_output(BOOTLOADER_PIN);         // Configure the Relay output
-    nrf_gpio_pin_set(BOOTLOADER_PIN);            // Start with it turned off    
+    nrf_gpio_pin_set(BOOTLOADER_PIN);            // Turn it off before config so we don't get a RESET pulse
+    nrf_gpio_cfg_output(BOOTLOADER_PIN);         // Configure the Bootloader
+    nrf_gpio_pin_set(BOOTLOADER_PIN);            // Turn off the Bootloader trigger (i.e. self-reset pin)
 
     return(ret);
 }

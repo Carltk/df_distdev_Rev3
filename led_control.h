@@ -64,6 +64,9 @@ typedef enum LED_FLASH
     LED_FLASH_SLOW =    0xFF00FF00,
     LED_FLASH_BLIP =    0x01010101,
     LED_FLASH_SPARSE =  0x00010001,
+    LED_SINGLE_FLASH =  0xF0000000,
+    LED_DOUBLE_FLASH =  0xF0F00000,
+    LED_TRIPLE_FLASH =  0xF0F0F000,
 } led_flash_pattern_t;
 
 typedef struct
@@ -145,6 +148,13 @@ void loopLEDPattern(uint8_t topIdx, uint8_t bottomIdx);
  * @param[out] linkNext - the value of the linkNext from the slot (or 0xFF if self-referenced or no linkNext)
 */
 uint8_t clearLEDSlot(proc_led_t * PL);
+
+/**
+ * @brief Function to poke a changed LED display value into the LED
+ *
+ * @param[in] no in value but will send the value at procled_current into the LED
+*/
+void ledNewValPoke(void);
 
 
 #endif // DF_LED_CONTROL_H__

@@ -43,11 +43,13 @@ extern nrfx_timer_t pulse_counter;
 #define PROC_LED_PIN    NRF_GPIO_PIN_MAP(1,10)         // This is the I2S SDOUT pin
 
 // *** I2S Configuration (underpins the LED control) ***
-#define I2S_MCK_PIN     NRFX_I2S_PIN_NOT_USED         // Other i2s pins are unused .. assign them to the unused pins underneath the module
-#define I2S_SCK_PIN     NRFX_I2S_PIN_NOT_USED         // These are Module Pins 60, 56, 59, 57 i.e. the ones under the middle of the module 
-#define I2S_LRCK_PIN    NRFX_I2S_PIN_NOT_USED
-#define I2S_SDIN_PIN    NRFX_I2S_PIN_NOT_USED
+// i2s required pins
+#define I2S_SCK_PIN     NRF_GPIO_PIN_MAP(1,3)         // These are Module Pins 60, 56, 59, 57 i.e. the ones under the middle of the module 
+#define I2S_LRCK_PIN    NRF_GPIO_PIN_MAP(1,4)
 #define I2S_SDOUT_PIN   PROC_LED_PIN
+// i2s optional pins
+#define I2S_MCK_PIN     NRFX_I2S_PIN_NOT_USED         // Other i2s pins are unused .. assign them to the unused pins underneath the module
+#define I2S_SDIN_PIN    NRFX_I2S_PIN_NOT_USED
 
 // Each LED color is considered a separate LED
 #define NUM_LEDS        3

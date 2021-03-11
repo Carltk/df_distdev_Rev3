@@ -15,9 +15,8 @@
 
 // *** Global Variables ***
 
-bool i2s_start = true;
-
-bool i2s_running = false;
+bool i2s_start;
+bool i2s_running;
 
 APP_TIMER_DEF(led_timer);                   // Timer definition
 
@@ -25,14 +24,15 @@ proc_led_t procled[NUM_PROC_LED_SLOTS];      // An array of proc_led control slo
 uint8_t procled_current;                     // Variable to hold currently processed procled array index
 
 uint32_t m_buffer_tx[I2S_BUFFER_SIZE];
-nrfx_i2s_config_t i2s_config = NRFX_I2S_DEFAULT_CONFIG;
+uint32_t m_buffer_rx[I2S_BUFFER_SIZE];
+nrfx_i2s_buffers_t m_buffer;
+
 
 // *** function prototypes ***
 void led_timer_handle(void * p_context);
 bool roll_mask(uint32_t * mask);
 
 uint32_t calcChannelVal(uint8_t level);
-//nrfx_i2s_data_handler_t i2s_data_handler((nrfx_i2s_buffers_t const * p_released, uint32_t status);
 void i2s_data_handler(nrfx_i2s_buffers_t const * p_released, uint32_t status);
 
 void setDefaultLEDState();
@@ -53,8 +53,7 @@ const uint8_t PROC_LED_WHITE[]   = {128,128,128};   // White
 // This is the I2S data handler - all data exchange related to the I2S transfers is done here.
 void i2s_data_handler(nrfx_i2s_buffers_t const * p_released, uint32_t status)
 {   if (status == NRFX_I2S_STATUS_NEXT_BUFFERS_NEEDED)
-    {   NRFX_LOG_INFO("TEST** i2s: Status Next Buffers Needed (finished?)");
-        nrfx_i2s_stop();        
+    {   nrfx_i2s_stop();        
         i2s_running = false;
     }      
 }
@@ -82,22 +81,33 @@ uint32_t calcChannelVal(uint8_t level)
 
 }
 
-void fillBuffers(uint8_t RVal, uint8_t GVal, uint8_t BVal)
-{   m_buffer_tx[0] = calcChannelVal(GVal);              // buffers hold GRB
-    m_buffer_tx[1] = calcChannelVal(RVal);
-    m_buffer_tx[2] = calcChannelVal(BVal);
-    
+void fillBuffers(uint8_t RVal, uint8_t GVal, uint8_t BVal, bool ledState)
+{   uint8_t i;
+
+    if (ledState)
+    {   m_buffer_tx[0] = calcChannelVal(GVal);               // ledState ON .. fill with colours from the procLed pattern
+        m_buffer_tx[1] = calcChannelVal(RVal);
+        m_buffer_tx[2] = calcChannelVal(BVal);
+    }
+    else
+    {   for (uint8_t i=0; i<NUM_COLOURS;i++)                // ledState OFF .. fill all 3 colour values with 0
+        {   m_buffer_tx[i] =  0x88888888;   }
+    }
+
     memset(&m_buffer_tx[3], 0x00, (4 * RESET_BITS));    // Clear 6 buffers from [3] onwards to make the >50uS reset pulse
 }
 
 ret_code_t sendLEDBlocks(proc_led_t * PL, bool ledState)
 {   
+    ret_code_t ret = 99;
+
     if (!i2s_running)
-    {   fillBuffers(PL->colourVal[0], PL->colourVal[1], PL->colourVal[2]);
-        APP_ERROR_CHECK(nrfx_i2s_start((nrfx_i2s_buffers_t *)m_buffer_tx, I2S_BUFFER_SIZE, 0));
+    {   fillBuffers(PL->colourVal[0], PL->colourVal[1], PL->colourVal[2], ledState);
+        ret = nrfx_i2s_start(&m_buffer, I2S_BUFFER_SIZE, 0);
         i2s_running = true;
-        
     }
+
+    return(ret);
 }
 
 ret_code_t df_led_init(void)
@@ -106,18 +116,21 @@ ret_code_t df_led_init(void)
     uint32_t newMask;
     uint8_t i;
 
-    // lfclk_request();             // This is done in main now                     // request (init) a lfclk device for the app_timer configured for LED control
-    // ret = app_timer_init();      // This is done in main/hardware_init now      // initialise the app_timer facility
+    i2s_start = false;
+    i2s_running = false;
 
-    ret = app_timer_create(&led_timer, APP_TIMER_MODE_REPEATED, led_timer_handle);  // Create an AppTimer for the Led controller
-    if (ret != NRFX_SUCCESS) goto IL_x;     
-    NRFX_LOG_INFO("LED Control - app timer created");           
-
+    nrfx_i2s_config_t i2s_config = NRFX_I2S_DEFAULT_CONFIG;
     i2s_config.sdin_pin = I2S_SDIN_PIN;
     i2s_config.sdout_pin = I2S_SDOUT_PIN;
+    i2s_config.sck_pin = I2S_SCK_PIN; 
+    i2s_config.lrck_pin = I2S_LRCK_PIN;
+    i2s_config.mck_pin = I2S_MCK_PIN; 
     i2s_config.mck_setup = NRF_I2S_MCK_32MDIV10;                                    // < 32 MHz / 10 = 3.2 MHz.
     i2s_config.ratio     = NRF_I2S_RATIO_32X;                                       // < LRCK = MCK / 32.
     i2s_config.channels  = NRF_I2S_CHANNELS_STEREO;
+
+    m_buffer.p_tx_buffer = m_buffer_tx;
+    m_buffer.p_rx_buffer = m_buffer_rx;
 
     ret = nrfx_i2s_init(&i2s_config, i2s_data_handler);
 
@@ -125,15 +138,23 @@ ret_code_t df_led_init(void)
     goto IL_x;
     NRFX_LOG_INFO("i2s module initialised"); 
 
+    ret = app_timer_create(&led_timer, APP_TIMER_MODE_REPEATED, led_timer_handle);  // Create an AppTimer for the Led controller
+    if (ret != NRFX_SUCCESS) goto IL_x;     
+    NRFX_LOG_INFO("LED Control - app timer created");           
+
     setDefaultLEDState();                   // Set up the initial flash state
 
     ret = app_timer_start(led_timer, APP_TIMER_TICKS(LED_MS_PER_TICK), NULL);       // Start the AppTimer
     if (ret != NRFX_SUCCESS) goto IL_x; 
 
-    app_timer_resume();                                                             // Ensure the RTC (source of AppTimer) is (re)started
-
 IL_x:
     return(ret);
+}
+
+void ledNewValPoke(void)
+{   app_timer_stop(led_timer);
+    led_timer_handle(NULL);    
+    app_timer_start(led_timer, APP_TIMER_TICKS(LED_MS_PER_TICK), NULL);       // Start the AppTimer
 }
 
 void wipeAllLEDSlots(void)
@@ -153,7 +174,7 @@ void setDefaultLEDState()
     wipeAllLEDSlots();
 
     // add patterns backwards to capture the nextLink
-    a = addLEDPattern(PROC_LED_WHITE, LED_FLASH_OFF, 2, 2, 0xFF);   // Blank 
+    a = addLEDPattern(PROC_LED_WHITE, LED_FLASH_OFF, 2, 4, 0xFF);   // Blank 
     c = addLEDPattern(PROC_LED_MAGENTA, LED_FLASH_ON, 2, 4, a);
     c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_ON, 2, 4, c);  
     c = addLEDPattern(PROC_LED_CYAN, LED_FLASH_ON, 2, 4, c);  
@@ -163,6 +184,7 @@ void setDefaultLEDState()
     c = addLEDPattern(PROC_LED_RED, LED_FLASH_ON, 2, 4, c);      // Red, ON, dwell=2/8S, delete=2/8S
     
     loopLEDPattern(a, c);
+
 }
 
 uint8_t addLEDPattern(const uint8_t * colourAry, uint32_t flashPattern, uint8_t cycleDwell, uint8_t slotTimeout, uint8_t link)
@@ -221,7 +243,8 @@ void led_timer_handle(void * p_context)
         {   PL = &procled[i];
 
             ledState = roll_mask(&PL->status.rolledFlashPattern);   // roll the flash pattern
-            sendLEDBlocks(PL, ledState);                            // send the colour code (or dark) out the i2s to the LED
+            if (sendLEDBlocks(PL, ledState))                            // send the colour code (or dark) out the i2s to the LED
+            {    NRFX_LOG_INFO("leds - couldn't send to i2s");    }
 
             if (PL->status.slotTimeLeft != 0xFF)                     // Check to see if this is an expireable slot
             {   PL->status.slotTimeLeft -= 1;                        // decrement its counter
@@ -245,6 +268,7 @@ void led_timer_handle(void * p_context)
         }
         unusedCnt+=1;
     }
+    if (i >= NUM_PROC_LED_SLOTS) procled_current = 0;
     if (procled_current >= NUM_PROC_LED_SLOTS) procled_current = 0;
     if (unusedCnt >= NUM_PROC_LED_SLOTS) setLEDOK(true);            // if there are no active slots, reinit to OK green flash
 }

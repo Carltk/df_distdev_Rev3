@@ -27,6 +27,7 @@ void app_timer_handle(void * p_context);
 void handle_push_button(void);
 void pump_state_machine(pump_controller_t *this_pump, pump_caller caller);
 void pump_clear_for_transaction(pump_controller_t *this_pump);
+void makeSysStatusFlashes(void);
 
 #define APP_MS_PER_TICK  100
 
@@ -40,7 +41,7 @@ ret_code_t application_init(void)
 
     ret = app_timer_start(app_timer, APP_TIMER_TICKS(APP_MS_PER_TICK), &app_state);     // Start the AppTimer for the application
     if (ret != NRFX_SUCCESS) goto AI_x; 
-    app_timer_resume();                                                                 // Ensure the RTC (source of AppTimer) is (re)started
+    //app_timer_resume();                                                                 // Ensure the RTC (source of AppTimer) is (re)started
     NRFX_LOG_INFO("App timer created and Started");           
 
     ret = init_temp();                                                                  // start temperature monitoring
@@ -134,45 +135,54 @@ void handle_push_button(void)
 {
     if (hardware.pushbutton[0] == 0)        // perform the actions when the button is released
     {   
+        NRFX_LOG_INFO("Button pressed for %d seconds", hardware.pushbutton_time[0] / 10);                   
+        
         switch (hardware.pushbutton_time[0] / 10)     // time is 100mS slices .. make seconds
         {
             case 0: case 1:                     // 0-2 seconds
                 clearLEDSlot(&procled[mode_button_LED]); 
-                makeSysStatusFlashes();
-                
-                // Make the system status stack
-                
-                NRFX_LOG_INFO("Button pressed less than 2 seconds");           
+                makeSysStatusFlashes();                     // Make the system status stack
+                mode_button_LED = 0xFF;
                 break;
             case 2: case 3: case 4:             // 2-5 sec            
                 pump_clear_for_transaction(&pump);
-                
-                NRFX_LOG_INFO("Button pressed for 2-5 seconds");           
                 break;
             case 5: case 6: case 7: case 8: case 9:     // 5-10 sec            
                 break;
             default:                            // more than 10 seconds
-                NRFX_LOG_INFO("Button pressed for more than 10 seconds");           
                 //do_factory_default(false);
                 trigger_bootloader();
                 break;
         }
-        
-        if_do_store_panic();            // !!!CK Here - dev mode only .. delete this
 
-        hardware.pushbutton_time[0] = 0;                            // Clear the timer/couter once processing is finished
+        hardware.pushbutton_time[0] = 0;                            // Clear the timer/counter once processing is finished
     }
 }
 
 
-void makeSysStatusFlashes()
+void makeSysStatusFlashes(void)
 {
+    uint8_t a, c;
+
     wipeAllLEDSlots();
 
+    // explode the hardware status block into LED flashes
 
 
+    // add patterns backwards to capture the nextLink
+    a = addLEDPattern(PROC_LED_GREEN, LED_DOUBLE_FLASH, 16, 32, 0xFF);    
+    c = addLEDPattern(PROC_LED_MAGENTA, LED_FLASH_ON, 2, 4, a);
 
+    c = addLEDPattern(PROC_LED_GREEN, LED_DOUBLE_FLASH, 16, 32, c);    
+    c = addLEDPattern(PROC_LED_BLUE, LED_SINGLE_FLASH, 8, 16, c);
 
+    c = addLEDPattern(PROC_LED_GREEN, LED_DOUBLE_FLASH, 16, 32, c);    
+    c = addLEDPattern(PROC_LED_ORANGE, LED_SINGLE_FLASH, 8, 16, c);
+    
+    c = addLEDPattern(PROC_LED_GREEN, LED_DOUBLE_FLASH, 16, 32, c);    // Double 4/8s flash (on/off/on/off) & do it twice
+    c = addLEDPattern(PROC_LED_CYAN, LED_SINGLE_FLASH, 8, 16, c);      // Single 4/8s flash, wait 4/8s & do it twice
+
+    loopLEDPattern(a, c);       // Write the loop-back index into the first pattern block & init the pattern
 }
 
 

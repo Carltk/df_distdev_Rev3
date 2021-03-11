@@ -800,6 +800,7 @@
 
 // </e>
 
+/*
 //==========================================================
 // <e> I2S_ENABLED - nrf_drv_i2s - I2S peripheral driver - legacy layer
 //==========================================================
@@ -810,14 +811,12 @@
 
 
 #ifndef I2S_CONFIG_SCK_PIN
-#define I2S_CONFIG_SCK_PIN 31
+#define I2S_CONFIG_SCK_PIN 255
 #endif
 
 // <o> I2S_CONFIG_LRCK_PIN - LRCK pin  <1-31> 
-
-
 #ifndef I2S_CONFIG_LRCK_PIN
-#define I2S_CONFIG_LRCK_PIN 30
+#define I2S_CONFIG_LRCK_PIN 255
 #endif
 
 // <o> I2S_CONFIG_MCK_PIN - MCK pin 
@@ -826,24 +825,19 @@
 #endif
 
 // <o> I2S_CONFIG_SDOUT_PIN - SDOUT pin  <0-31> 
-
-
 #ifndef I2S_CONFIG_SDOUT_PIN
-#define I2S_CONFIG_SDOUT_PIN 29
+#define I2S_CONFIG_SDOUT_PIN 255
 #endif
 
 // <o> I2S_CONFIG_SDIN_PIN - SDIN pin  <0-31> 
-
-
 #ifndef I2S_CONFIG_SDIN_PIN
-#define I2S_CONFIG_SDIN_PIN 28
+#define I2S_CONFIG_SDIN_PIN 255
 #endif
 
 // <o> I2S_CONFIG_MASTER  - Mode
  
 // <0=> Master 
 // <1=> Slave 
-
 #ifndef I2S_CONFIG_MASTER
 #define I2S_CONFIG_MASTER 0
 #endif
@@ -852,16 +846,13 @@
  
 // <0=> I2S 
 // <1=> Aligned 
-
 #ifndef I2S_CONFIG_FORMAT
 #define I2S_CONFIG_FORMAT 0
 #endif
 
 // <o> I2S_CONFIG_ALIGN  - Alignment
- 
 // <0=> Left 
 // <1=> Right 
-
 #ifndef I2S_CONFIG_ALIGN
 #define I2S_CONFIG_ALIGN 0
 #endif
@@ -871,7 +862,6 @@
 // <0=> 8 
 // <1=> 16 
 // <2=> 24 
-
 #ifndef I2S_CONFIG_SWIDTH
 #define I2S_CONFIG_SWIDTH 1
 #endif
@@ -881,9 +871,8 @@
 // <0=> Stereo 
 // <1=> Left 
 // <2=> Right 
-
 #ifndef I2S_CONFIG_CHANNELS
-#define I2S_CONFIG_CHANNELS 1
+#define I2S_CONFIG_CHANNELS 0
 #endif
 
 // <o> I2S_CONFIG_MCK_SETUP  - MCK behavior
@@ -909,7 +898,7 @@
 // <34340864=> 32MHz/125 
 
 #ifndef I2S_CONFIG_MCK_SETUP
-#define I2S_CONFIG_MCK_SETUP 536870912
+#define I2S_CONFIG_MCK_SETUP 402653184
 #endif
 
 // <o> I2S_CONFIG_RATIO  - MCK/LRCK ratio
@@ -925,7 +914,7 @@
 // <8=> 512x 
 
 #ifndef I2S_CONFIG_RATIO
-#define I2S_CONFIG_RATIO 2000
+#define I2S_CONFIG_RATIO 0
 #endif
 
 // <o> I2S_CONFIG_IRQ_PRIORITY  - Interrupt priority
@@ -948,7 +937,7 @@
 // <e> I2S_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef I2S_CONFIG_LOG_ENABLED
-#define I2S_CONFIG_LOG_ENABLED 0
+#define I2S_CONFIG_LOG_ENABLED 1
 #endif
 // <o> I2S_CONFIG_LOG_LEVEL  - Default Severity level
  
@@ -997,22 +986,19 @@
 // </e>
 
 // </e>
-
+*/
 // <e> NRFX_I2S_ENABLED - nrfx_i2s - I2S peripheral driver
 //==========================================================
 #ifndef NRFX_I2S_ENABLED
 #define NRFX_I2S_ENABLED 1
 #endif
+
 // <o> NRFX_I2S_CONFIG_SCK_PIN - SCK pin  <0-31> 
-
-
 #ifndef NRFX_I2S_CONFIG_SCK_PIN
 #define NRFX_I2S_CONFIG_SCK_PIN 255
 #endif
 
 // <o> NRFX_I2S_CONFIG_LRCK_PIN - LRCK pin  <1-31> 
-
-
 #ifndef NRFX_I2S_CONFIG_LRCK_PIN
 #define NRFX_I2S_CONFIG_LRCK_PIN 255
 #endif
@@ -1023,64 +1009,50 @@
 #endif
 
 // <o> NRFX_I2S_CONFIG_SDOUT_PIN - SDOUT pin  <0-31> 
-
-
 #ifndef NRFX_I2S_CONFIG_SDOUT_PIN
 #define NRFX_I2S_CONFIG_SDOUT_PIN 255
 #endif
 
 // <o> NRFX_I2S_CONFIG_SDIN_PIN - SDIN pin  <0-31> 
-
-
 #ifndef NRFX_I2S_CONFIG_SDIN_PIN
 #define NRFX_I2S_CONFIG_SDIN_PIN 255
 #endif
 
 // <o> NRFX_I2S_CONFIG_MASTER  - Mode
- 
 // <0=> Master 
 // <1=> Slave 
-
 #ifndef NRFX_I2S_CONFIG_MASTER
 #define NRFX_I2S_CONFIG_MASTER 0
 #endif
 
 // <o> NRFX_I2S_CONFIG_FORMAT  - Format
- 
 // <0=> I2S 
 // <1=> Aligned 
-
 #ifndef NRFX_I2S_CONFIG_FORMAT
 #define NRFX_I2S_CONFIG_FORMAT 0
 #endif
 
 // <o> NRFX_I2S_CONFIG_ALIGN  - Alignment
- 
 // <0=> Left 
 // <1=> Right 
-
 #ifndef NRFX_I2S_CONFIG_ALIGN
 #define NRFX_I2S_CONFIG_ALIGN 0
 #endif
 
 // <o> NRFX_I2S_CONFIG_SWIDTH  - Sample width (bits)
- 
 // <0=> 8 
 // <1=> 16 
 // <2=> 24 
-
 #ifndef NRFX_I2S_CONFIG_SWIDTH
 #define NRFX_I2S_CONFIG_SWIDTH 1
 #endif
 
 // <o> NRFX_I2S_CONFIG_CHANNELS  - Channels
- 
 // <0=> Stereo 
 // <1=> Left 
 // <2=> Right 
-
 #ifndef NRFX_I2S_CONFIG_CHANNELS
-#define NRFX_I2S_CONFIG_CHANNELS 1
+#define NRFX_I2S_CONFIG_CHANNELS 0
 #endif
 
 // <o> NRFX_I2S_CONFIG_MCK_SETUP  - MCK behavior
@@ -1106,7 +1078,7 @@
 // <34340864=> 32MHz/125 
 
 #ifndef NRFX_I2S_CONFIG_MCK_SETUP
-#define NRFX_I2S_CONFIG_MCK_SETUP 536870912
+#define NRFX_I2S_CONFIG_MCK_SETUP 402653184
 #endif
 
 // <o> NRFX_I2S_CONFIG_RATIO  - MCK/LRCK ratio
@@ -1137,13 +1109,13 @@
 // <7=> 7 
 
 #ifndef NRFX_I2S_CONFIG_IRQ_PRIORITY
-#define NRFX_I2S_CONFIG_IRQ_PRIORITY 6
+#define NRFX_I2S_CONFIG_IRQ_PRIORITY 7
 #endif
 
 // <e> NRFX_I2S_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef NRFX_I2S_CONFIG_LOG_ENABLED
-#define NRFX_I2S_CONFIG_LOG_ENABLED 0
+#define NRFX_I2S_CONFIG_LOG_ENABLED 1
 #endif
 // <o> NRFX_I2S_CONFIG_LOG_LEVEL  - Default Severity level
  
@@ -1926,7 +1898,7 @@
 // <7=> 7 
 
 #ifndef APP_TIMER_CONFIG_IRQ_PRIORITY
-#define APP_TIMER_CONFIG_IRQ_PRIORITY 6
+#define APP_TIMER_CONFIG_IRQ_PRIORITY 5
 #endif
 
 // <o> APP_TIMER_CONFIG_OP_QUEUE_SIZE - Capacity of timer requests queue. 
