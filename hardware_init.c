@@ -59,8 +59,8 @@ ret_code_t df_hardware_init(void)
     APP_ERROR_CHECK(df_pulser_init());              // Initialise the Pulser Counter
     NRFX_LOG_INFO("Pulser Handler - Initialised");     
 
-    APP_ERROR_CHECK(df_or_sense_init());              // Initialise the Pulser Counter
-    NRFX_LOG_INFO("Override Sense Handler - Initialised");     
+//    APP_ERROR_CHECK(df_or_sense_init());              // Initialise the Pulser Counter
+//    NRFX_LOG_INFO("Override Sense Handler - Initialised");     
 
 
     return ret;
@@ -142,10 +142,13 @@ void df_nozzle_handler(uint8_t pin_no, uint8_t button_action)
 
 void df_mode_handler(uint8_t pin_no, uint8_t button_action)
 {   
+
+    NRFX_LOG_INFO("Mode pin_no [%d] State [%x]", pin_no, button_action);                     
+    
     if (button_action)
     {   mode_button_LED = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_SLOW, 120, 120, 0xFF);     // Start a 1sec flash in yellow
         loopLEDPattern(mode_button_LED, mode_button_LED);                                     // change the linkNext pointer to itself
-        ledNewValPoke();                                                                      // Force the new value into the LED display  
+        ledNewValPoke(mode_button_LED);                                                                      // Force the new value into the LED display  
     }
     
     for (uint8_t i=0;i<NUM_PBS;i++)                         // The mode button handler is in the application timer handler so that different hold-times can be determined
@@ -215,7 +218,7 @@ ret_code_t df_relay_init(void)
 
     // Relay can be normal GPIO
     nrf_gpio_cfg_output(RELAY_PIN);         // Configure the Relay output
-    df_relay_change(RELAY_PIN, 0);          // Start with it turned off    
+    // df_relay_change(RELAY_PIN, 0);          // Start with it turned off    
 
     return(ret);
 }

@@ -140,7 +140,7 @@ void handle_push_button(void)
         switch (hardware.pushbutton_time[0] / 10)     // time is 100mS slices .. make seconds
         {
             case 0: case 1:                     // 0-2 seconds
-                clearLEDSlot(&procled[mode_button_LED]); 
+                clearLEDSlot(mode_button_LED); 
                 makeSysStatusFlashes();                     // Make the system status stack
                 mode_button_LED = 0xFF;
                 break;

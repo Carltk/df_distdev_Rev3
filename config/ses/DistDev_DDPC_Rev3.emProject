@@ -86,7 +86,6 @@
       <file file_name="../../../components/libraries/usbd/app_usbd.c" />
     </folder>
     <folder Name="nRF_Drivers">
-      <file file_name="../../../components/drivers_nrf/nrf_soc_nosd/nrf_nvic.c" />
       <file file_name="../../../components/drivers_nrf/nrf_soc_nosd/nrf_soc.c" />
       <file file_name="../../../modules/nrfx/soc/nrfx_atomic.c" />
       <file file_name="../../../modules/nrfx/drivers/src/nrfx_clock.c" />
@@ -101,6 +100,7 @@
       <file file_name="../../../modules/nrfx/hal/nrf_nvmc.c" />
       <file file_name="../../../modules/nrfx/drivers/src/nrfx_saadc.c" />
       <file file_name="../../../modules/nrfx/drivers/src/nrfx_i2s.c" />
+      <file file_name="../../../components/drivers_nrf/nrf_soc_nosd/nrf_nvic.c" />
     </folder>
     <folder Name="Board Support">
       <file file_name="../../../components/libraries/bsp/bsp.c">

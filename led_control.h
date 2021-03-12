@@ -47,7 +47,6 @@ This is controlled by a stack of data structures
 
 extern const uint8_t PROC_LED_RED[];
 extern const uint8_t PROC_LED_GREEN[];
-
 extern const uint8_t PROC_LED_ORANGE[];
 extern const uint8_t PROC_LED_YELLOW[];
 extern const uint8_t PROC_LED_CYAN[];
@@ -90,9 +89,6 @@ typedef struct
 
     procled_status_t status;        // Status of this procled slot
 } proc_led_t;
-extern proc_led_t procled[NUM_PROC_LED_SLOTS];      // An array of proc_led control slots
-extern uint8_t procled_current;                     // Variable to hold the index to procled_index[] that is currently being processes
-
 
 #define PROCLED_OK_DEFAULT              \
 {   .colourVal = PROC_LED_GREEN,        \
@@ -144,17 +140,16 @@ void loopLEDPattern(uint8_t topIdx, uint8_t bottomIdx);
 /**
  * @brief Function to delete a LED flash pattern slot
  *
- * @param[in] PL - the procled[] slot to clear
+ * @param[in] PL - the array index of the procled[] slot to clear
  * @param[out] linkNext - the value of the linkNext from the slot (or 0xFF if self-referenced or no linkNext)
 */
-uint8_t clearLEDSlot(proc_led_t * PL);
+uint8_t clearLEDSlot(uint8_t Idx);
 
 /**
  * @brief Function to poke a changed LED display value into the LED
  *
- * @param[in] no in value but will send the value at procled_current into the LED
+ * @param[in] if value is supplied, copy it into procled_current (set to 0xFF to use current value of procled_current)
 */
-void ledNewValPoke(void);
-
+void ledNewValPoke(uint8_t Idx);
 
 #endif // DF_LED_CONTROL_H__
