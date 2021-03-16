@@ -16,6 +16,8 @@
 // *** Global Variables ***
 
 bool i2s_running;
+#define I2S_ERR_TH  10
+uint8_t i2s_errcount;
 
 static nrfx_i2s_config_t i2s_config = NRFX_I2S_DEFAULT_CONFIG;     // i2s definition
 APP_TIMER_DEF(led_timer);                                   // Timer definition
@@ -59,6 +61,7 @@ ret_code_t df_led_init(void)
     uint8_t i;
 
     i2s_running = false;
+    i2s_errcount = 0;
 
     i2s_config.sdin_pin = I2S_SDIN_PIN;
     i2s_config.sdout_pin = I2S_SDOUT_PIN;
@@ -73,6 +76,7 @@ ret_code_t df_led_init(void)
     m_buffer.p_rx_buffer = m_buffer_rx;
 
     ret = nrfx_i2s_init(&i2s_config, i2s_data_handler);
+    nrfx_i2s_stop();  
 
     if (ret != NRFX_SUCCESS)
     goto IL_x;
@@ -82,10 +86,10 @@ ret_code_t df_led_init(void)
     if (ret != NRFX_SUCCESS) goto IL_x;     
     NRFX_LOG_INFO("LED Control - app timer created");           
 
-    setDefaultLEDState();                   // Set up the initial flash state
-
     ret = app_timer_start(led_timer, APP_TIMER_TICKS(LED_MS_PER_TICK), NULL);       // Start the AppTimer
     if (ret != NRFX_SUCCESS) goto IL_x; 
+
+    setDefaultLEDState();                   // Set up the initial flash state
 
 IL_x:
     return(ret);
@@ -124,6 +128,9 @@ uint8_t addLEDPattern(const uint8_t * colourAry, uint32_t flashPattern, uint8_t 
             break;
         }
     }
+
+    //NRFX_LOG_INFO("leds: added pattern at [%d]", thisSlot);                 
+
     return(thisSlot);
 }
 
@@ -154,10 +161,13 @@ uint8_t clearLEDSlot(uint8_t Idx)
 
 // This is the I2S data handler - all data exchange related to the I2S transfers is done here.
 static void i2s_data_handler(nrfx_i2s_buffers_t const * p_released, uint32_t status)
-{   if (status == NRFX_I2S_STATUS_NEXT_BUFFERS_NEEDED)
-    {   nrfx_i2s_stop();        
+{   
+    if (status == NRFX_I2S_STATUS_NEXT_BUFFERS_NEEDED)
+    {   nrfx_i2s_stop();   
         i2s_running = false;
-    }      
+        i2s_errcount = 0;
+        //NRFX_LOG_INFO("leds: i2s stop");
+    }  
 }
 
 // because of the way i2s encodes signals (i.e. Left/Right)
@@ -207,6 +217,13 @@ static ret_code_t sendLEDBlocks(proc_led_t * PL, bool ledState)
     {   fillBuffers(PL->colourVal[0], PL->colourVal[1], PL->colourVal[2], ledState);
         ret = nrfx_i2s_start(&m_buffer, I2S_BUFFER_SIZE, 0);
         i2s_running = true;
+    }
+    else
+    {   i2s_errcount += 1;
+        if (i2s_errcount >= I2S_ERR_TH)
+        {   i2s_running = false;
+            i2s_errcount = 0;
+        }
     }
 
     return(ret);
@@ -267,14 +284,16 @@ static void led_timer_handle(void * p_context)
             if (PL->status.slotTimeLeft != 0xFF)                     // Check to see if this is an expireable slot
             {   PL->status.slotTimeLeft -= 1;                        // decrement its counter
                 if (PL->status.slotTimeLeft == 0)                    // if it reaches 0
-                {   procled_current = clearLEDSlot(i);             // delete the slot
+                {   // NRFX_LOG_INFO("leds: slot timeout on idx [%d]", i);                 
+                    procled_current = clearLEDSlot(i);             // delete the slot
                     return;       
                 }
             }
 
             PL->status.cycleDwellCount -= 1;                        // Check to see if we've timed out this colour
             if (PL->status.cycleDwellCount == 0)                    // yes?
-            {   PL->status.cycleDwellCount = PL->cycleDwell;        // reset the cycle dwell counter
+            {   // NRFX_LOG_INFO("leds: cycle dwell timeout on idx [%d]", i);                 
+                PL->status.cycleDwellCount = PL->cycleDwell;        // reset the cycle dwell counter
                 
                 if (PL->linkNext != 0xFF)                           // see if we have a next-slot-link
                 {   procled_current = PL->linkNext; }               // if so, set up the jump for next timer handler
@@ -286,6 +305,7 @@ static void led_timer_handle(void * p_context)
         }
         unusedCnt+=1;
     }
+   
     if (i >= NUM_PROC_LED_SLOTS) procled_current = 0;
     if (procled_current >= NUM_PROC_LED_SLOTS) procled_current = 0;
     if (unusedCnt >= NUM_PROC_LED_SLOTS) setLEDOK(true);            // if there are no active slots, reinit to OK green flash

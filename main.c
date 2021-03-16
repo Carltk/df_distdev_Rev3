@@ -88,12 +88,15 @@ int main(void)
 {   ret_code_t ret; 
     char c;
 
-    NRFX_LOG_INFO("*** Starting DF_DistDev Application ***");
+    NRF_LOG_INFO("UICR_APPROTECT [%x]", NRF_UICR->APPROTECT);
 
     gpio_output_voltage_setup();    // Set up the onboard voltage regulators
+    ddpc_rev3_configure_debug();    // Configure the CPU debugger options
 
-    clock_init();               // Init the system clock for FDS and LED Control
-    timer_init();               // and the timer library
+    NRFX_LOG_INFO("*** Starting DF_DistDev Application ***");
+
+    clock_init();                   // Init the system clock for FDS and LED Control
+    timer_init();                   // and the timer library
 
     APP_ERROR_CHECK(NRF_LOG_INIT(NULL));
     NRF_LOG_DEFAULT_BACKENDS_INIT();
@@ -118,6 +121,10 @@ int main(void)
 
     ddpc.nv_panic.boot_count += 1;                      // inc the boot count
     flash_control.need_panic_save = true;
+
+    NRF_LOG_INFO("UICR_APPROTECT [%x]", NRF_UICR->APPROTECT);
+    NRF_LOG_INFO("UICR_DEBUGCTRL [%x]", NRF_UICR->DEBUGCTRL);
+    NRF_LOG_INFO("CLOCK_TRACECONFIG [%x]", NRF_CLOCK->TRACECONFIG);
 
     NRF_LOG_INFO("DF_DistDev - Main Loop Starting");
 

@@ -218,7 +218,7 @@ ret_code_t df_relay_init(void)
 
     // Relay can be normal GPIO
     nrf_gpio_cfg_output(RELAY_PIN);         // Configure the Relay output
-    // df_relay_change(RELAY_PIN, 0);          // Start with it turned off    
+    df_relay_change(RELAY_PIN, 1);          // Start with it turned off    
 
     return(ret);
 }
@@ -229,9 +229,9 @@ void df_relay_change(uint32_t channel, uint8_t state)
     if (channel == 0) { chan = RELAY_PIN;   }
 
     if (state)
-    {   nrf_gpio_pin_clear(chan);   }
+    {   nrf_gpio_pin_set(chan);   }
     else
-    {   nrf_gpio_pin_set(chan);     }
+    {   nrf_gpio_pin_clear(chan);     }
 }
 
 

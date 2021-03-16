@@ -18,14 +18,16 @@ extern nrfx_timer_t pulse_counter;
 #define OR_SENSE_1      NRF_GPIO_PIN_MAP(0,4)        // !!! Need to Analog init & a handler tied in to the Pump Control state machine
 #define OR_SENSE_2      NRF_GPIO_PIN_MAP(0,5)        // !!! Need to Analog init & a handler tied in to the Pump Control state machine
 
-// *** Output Pins ***
-#define RELAY_PIN       NRF_GPIO_PIN_MAP(1,9)
-#define GPOUT_PIN       NRF_GPIO_PIN_MAP(0,2)         // !!! Need to init & handler (polled is OK)
-
 // *** Spare Pins ***
 #define SPARE_1_PIN     NRF_GPIO_PIN_MAP(1,15)       // Spare pins .. init as outputs
 #define SPARE_2_PIN     NRF_GPIO_PIN_MAP(0,3)
 #define SPARE_3_PIN     NRF_GPIO_PIN_MAP(0,29)
+
+// *** Output Pins ***
+#define RELAY_PIN       NRF_GPIO_PIN_MAP(1,9)   // TRACEDATA(3)
+// #define RELAY_PIN       NRF_GPIO_PIN_MAP(0,12)   // TRACEDATA(1)
+// #define RELAY_PIN       NRF_GPIO_PIN_MAP(0,11)   // TRACEDATA(2)
+#define GPOUT_PIN       NRF_GPIO_PIN_MAP(0,2)         // !!! Need to init & handler (polled is OK)
 
 
 // *** With Circuit board Mods - Piggyback Mag_Sense onto Mode_PB

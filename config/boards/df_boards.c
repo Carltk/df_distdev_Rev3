@@ -71,6 +71,55 @@ void gpio_output_voltage_setup(void)
         NVIC_SystemReset();
     }
 }
+
+
+// Debug control is handled by 3 registers:
+//  NRF_UICR->APPROTECT - Access Port Protection blocks the debugger from read write access. 
+//                            Enabled=0xXXXXXX00, Disabled=0xXXXXXXFF (Default State)
+//  NRF_UICR->DEBUGCTRL - Debug Control configures the CPU's debug features
+//                          CPUIDEN - CPU ITM & ETM functionality. ETM trace is only in Parallel mode, Serial-
+//                            Enabled=0xXXXXXXFF, Disabled=0xXXXXXX00
+//                          CPUPBEN - CPU flash patch & breakpoint unit
+//                            Enabled=0xXXXXFFXX, Disabled=0xXXXX00XX
+//  NRF_CLOCK->TRACECONFIG - Configuration of the CPU Trace pins
+//                          TRACEPORTSPEED - Speed of port clock TRACECLK = speed/2
+//                            Mask: 0xXXXXXXX(xxnn) where nn: 0=32MHz, 1=16MHz, 2=8MHz, 3=4MHz
+//                          TRACEMUX - Which trace port pins are in use
+//                            Mask: 0xXXX(xxnn)XXXX 
+//                                  where nn: 0=GPIO (no trace routed to pins all GPIO)
+//                                            1=Serial (SWO routed to pin, all others can be GPIO)
+//                                            2=Parallel (TRACECLK & TRACEDATA(0-3) routed to pins) 
+void ddpc_rev3_configure_debug(void)
+{
+  
+    // Default value of APPROTECT is OK .. no need to program    
+    // NRF_UICR->APPROTECT = (NRF_UICR->APPROTECT & ~((uint32_t)UICR_APPROTECT_PALL_Msk)) |
+    //                       ( UICR_APPROTECT_PALL_Disabled << UICR_APPROTECT_PALL_Pos);    
+
+    // Debug Control CPUPBEN->CPUPBEN (default value is OK)
+    // NRF_UICR->DEBUGCTRL = (NRF_UICR->DEBUGCTRL & ~((uint32_t)UICR_DEBUGCTRL_CPUFPBEN_Msk)) |
+    //                        ( UICR_DEBUGCTRL_CPUFPBEN_Enabled << UICR_DEBUGCTRL_CPUFPBEN_Pos);        
+
+    // Debug Control CPUPBEN->CPUIDEN (default value is OK)
+    // NRF_UICR->DEBUGCTRL = (NRF_UICR->DEBUGCTRL & ~((uint32_t)UICR_DEBUGCTRL_CPUNIDEN_Msk)) |
+    //                        ( UICR_DEBUGCTRL_CPUNIDEN_Enabled << UICR_DEBUGCTRL_CPUNIDEN_Pos);        
+
+    // TraceConfig TRACECONFIG->TRACEMUX .. set to serial mode
+    NRF_CLOCK->TRACECONFIG = (NRF_CLOCK->TRACECONFIG & ~((uint32_t)CLOCK_TRACECONFIG_TRACEMUX_Msk)) |
+                             ( CLOCK_TRACECONFIG_TRACEMUX_Serial << CLOCK_TRACECONFIG_TRACEMUX_Pos);        
+            // #define CLOCK_TRACECONFIG_TRACEMUX_GPIO (0UL) /*!< No trace signals routed to pins. All pins can be used as regular GPIOs. */
+            // #define CLOCK_TRACECONFIG_TRACEMUX_Serial (1UL) /*!< SWO trace signal routed to pin. Remaining pins can be used as regular GPIOs. */
+            // #define CLOCK_TRACECONFIG_TRACEMUX_Parallel (2UL) /*!< All trace signals (TRACECLK and TRACEDATA[n]) routed to pins. */
+
+    // TraceConfig TRACECONFIG->TRACEPORTSPEED (default value is OK)
+    // NRF_CLOCK->TRACECONFIG = (NRF_CLOCK->TRACECONFIG & ~((uint32_t)CLOCK_TRACECONFIG_TRACEPORTSPEED_Msk)) |
+    //                          ( CLOCK_TRACECONFIG_TRACEPORTSPEED_32MHz << CLOCK_TRACECONFIG_TRACEPORTSPEED_Pos);        
+            // #define CLOCK_TRACECONFIG_TRACEPORTSPEED_32MHz (0UL) /*!< 32 MHz trace port clock (TRACECLK = 16 MHz) */
+            // #define CLOCK_TRACECONFIG_TRACEPORTSPEED_16MHz (1UL) /*!< 16 MHz trace port clock (TRACECLK = 8 MHz) */
+            // #define CLOCK_TRACECONFIG_TRACEPORTSPEED_8MHz (2UL) /*!< 8 MHz trace port clock (TRACECLK = 4 MHz) */
+            // #define CLOCK_TRACECONFIG_TRACEPORTSPEED_4MHz (3UL) /*!< 4 MHz trace port clock (TRACECLK = 2 MHz) */
+}
+
 #endif
 
 #if LEDS_NUMBER > 0

@@ -978,11 +978,105 @@
 
 // </e>
 
+//==========================================================
 
+// <h> nRF_Drivers 
 
+//==========================================================
+// <e> I2S_ENABLED - nrf_drv_i2s - I2S peripheral driver - legacy layer
+//==========================================================
+#ifndef I2S_ENABLED
+#define I2S_ENABLED 1
+#endif
 
+// <o> I2S_CONFIG_SCK_PIN - SCK pin  <0-31> 
+#ifndef I2S_CONFIG_SCK_PIN
+#define I2S_CONFIG_SCK_PIN 255
+#endif
 
+// <o> I2S_CONFIG_LRCK_PIN - LRCK pin  <1-31> 
+#ifndef I2S_CONFIG_LRCK_PIN
+#define I2S_CONFIG_LRCK_PIN 255
+#endif
 
+// <o> I2S_CONFIG_MCK_PIN - MCK pin 
+#ifndef I2S_CONFIG_MCK_PIN
+#define I2S_CONFIG_MCK_PIN 255
+#endif
+
+// <o> I2S_CONFIG_SDOUT_PIN - SDOUT pin  <0-31> 
+#ifndef I2S_CONFIG_SDOUT_PIN
+#define I2S_CONFIG_SDOUT_PIN 255
+#endif
+
+// <o> I2S_CONFIG_SDIN_PIN - SDIN pin  <0-31> 
+#ifndef I2S_CONFIG_SDIN_PIN
+#define I2S_CONFIG_SDIN_PIN 255
+#endif
+
+// <o> I2S_CONFIG_MASTER  - Mode
+#ifndef I2S_CONFIG_MASTER
+#define I2S_CONFIG_MASTER 0
+#endif
+
+// <o> I2S_CONFIG_FORMAT  - Format
+#ifndef I2S_CONFIG_FORMAT
+#define I2S_CONFIG_FORMAT 0
+#endif
+
+// <o> I2S_CONFIG_ALIGN  - Alignment
+#ifndef I2S_CONFIG_ALIGN
+#define I2S_CONFIG_ALIGN 0
+#endif
+
+// <o> I2S_CONFIG_SWIDTH  - Sample width (bits)
+#ifndef I2S_CONFIG_SWIDTH
+#define I2S_CONFIG_SWIDTH 1
+#endif
+
+// <o> I2S_CONFIG_CHANNELS  - Channels
+#ifndef I2S_CONFIG_CHANNELS
+#define I2S_CONFIG_CHANNELS 0
+#endif
+
+// <o> I2S_CONFIG_MCK_SETUP  - MCK behavior
+#ifndef I2S_CONFIG_MCK_SETUP
+#define I2S_CONFIG_MCK_SETUP  402653184
+#endif
+
+// <o> I2S_CONFIG_RATIO  - MCK/LRCK ratio
+#ifndef I2S_CONFIG_RATIO
+#define I2S_CONFIG_RATIO 2000
+#endif
+
+// <o> I2S_CONFIG_IRQ_PRIORITY  - Interrupt priority
+#ifndef I2S_CONFIG_IRQ_PRIORITY
+#define I2S_CONFIG_IRQ_PRIORITY 6
+#endif
+
+// <e> I2S_CONFIG_LOG_ENABLED - Enables logging in the module.
+//==========================================================
+#ifndef I2S_CONFIG_LOG_ENABLED
+#define I2S_CONFIG_LOG_ENABLED 0
+#endif
+
+// <o> I2S_CONFIG_LOG_LEVEL  - Default Severity level
+#ifndef I2S_CONFIG_LOG_LEVEL
+#define I2S_CONFIG_LOG_LEVEL 3
+#endif
+
+// <o> I2S_CONFIG_INFO_COLOR  - ANSI escape code prefix.
+#ifndef I2S_CONFIG_INFO_COLOR
+#define I2S_CONFIG_INFO_COLOR 0
+#endif
+
+// <o> I2S_CONFIG_DEBUG_COLOR  - ANSI escape code prefix.
+#ifndef I2S_CONFIG_DEBUG_COLOR
+#define I2S_CONFIG_DEBUG_COLOR 0
+#endif
+
+// </e>
+// </e>
 
 // <e> NRFX_UARTE_ENABLED - nrfx_uarte - UARTE peripheral driver
 //==========================================================
