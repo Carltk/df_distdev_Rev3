@@ -73,13 +73,13 @@
  * Function for configuring UICR_REGOUT0 register
  * to set GPIO output voltage to 3.0V.
  */
-void gpio_output_voltage_setup(void);
+uint8_t gpio_output_voltage_setup(void);
 
 /**
  * Function to configuring CPU debug options to allow
  * alternate use of the TRACEDATA pins
  */
-void ddpc_rev3_configure_debug(void);
+uint8_t ddpc_rev3_configure_debug(void);
 
 /**
  * Function for returning the state of an LED.

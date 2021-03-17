@@ -24,9 +24,11 @@ extern nrfx_timer_t pulse_counter;
 #define SPARE_3_PIN     NRF_GPIO_PIN_MAP(0,29)
 
 // *** Output Pins ***
+//#define RELAY_PIN       SPARE_3_PIN
 #define RELAY_PIN       NRF_GPIO_PIN_MAP(1,9)   // TRACEDATA(3)
 // #define RELAY_PIN       NRF_GPIO_PIN_MAP(0,12)   // TRACEDATA(1)
 // #define RELAY_PIN       NRF_GPIO_PIN_MAP(0,11)   // TRACEDATA(2)
+
 #define GPOUT_PIN       NRF_GPIO_PIN_MAP(0,2)         // !!! Need to init & handler (polled is OK)
 
 

@@ -75,9 +75,6 @@ ret_code_t df_led_init(void)
     m_buffer.p_tx_buffer = m_buffer_tx;
     m_buffer.p_rx_buffer = m_buffer_rx;
 
-    ret = nrfx_i2s_init(&i2s_config, i2s_data_handler);
-    nrfx_i2s_stop();  
-
     if (ret != NRFX_SUCCESS)
     goto IL_x;
     NRFX_LOG_INFO("i2s module initialised"); 
@@ -90,6 +87,7 @@ ret_code_t df_led_init(void)
     if (ret != NRFX_SUCCESS) goto IL_x; 
 
     setDefaultLEDState();                   // Set up the initial flash state
+    ret = nrfx_i2s_init(&i2s_config, i2s_data_handler);
 
 IL_x:
     return(ret);
@@ -129,7 +127,7 @@ uint8_t addLEDPattern(const uint8_t * colourAry, uint32_t flashPattern, uint8_t 
         }
     }
 
-    //NRFX_LOG_INFO("leds: added pattern at [%d]", thisSlot);                 
+    NRFX_LOG_INFO("leds: added pattern at [%d]", thisSlot);                 
 
     return(thisSlot);
 }
@@ -216,6 +214,7 @@ static ret_code_t sendLEDBlocks(proc_led_t * PL, bool ledState)
     if (!i2s_running)
     {   fillBuffers(PL->colourVal[0], PL->colourVal[1], PL->colourVal[2], ledState);
         ret = nrfx_i2s_start(&m_buffer, I2S_BUFFER_SIZE, 0);
+        //NRFX_LOG_INFO("leds: i2s Start");                 
         i2s_running = true;
     }
     else
@@ -284,7 +283,7 @@ static void led_timer_handle(void * p_context)
             if (PL->status.slotTimeLeft != 0xFF)                     // Check to see if this is an expireable slot
             {   PL->status.slotTimeLeft -= 1;                        // decrement its counter
                 if (PL->status.slotTimeLeft == 0)                    // if it reaches 0
-                {   // NRFX_LOG_INFO("leds: slot timeout on idx [%d]", i);                 
+                {   //NRFX_LOG_INFO("leds: slot timeout on idx [%d]", i);                 
                     procled_current = clearLEDSlot(i);             // delete the slot
                     return;       
                 }

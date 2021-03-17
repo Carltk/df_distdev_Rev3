@@ -87,11 +87,9 @@ void dongle_psu_reg_init();
 int main(void)
 {   ret_code_t ret; 
     char c;
-
-    NRF_LOG_INFO("UICR_APPROTECT [%x]", NRF_UICR->APPROTECT);
+    uint8_t need_reset = 0;
 
     gpio_output_voltage_setup();    // Set up the onboard voltage regulators
-    ddpc_rev3_configure_debug();    // Configure the CPU debugger options
 
     NRFX_LOG_INFO("*** Starting DF_DistDev Application ***");
 
@@ -122,9 +120,9 @@ int main(void)
     ddpc.nv_panic.boot_count += 1;                      // inc the boot count
     flash_control.need_panic_save = true;
 
-    NRF_LOG_INFO("UICR_APPROTECT [%x]", NRF_UICR->APPROTECT);
-    NRF_LOG_INFO("UICR_DEBUGCTRL [%x]", NRF_UICR->DEBUGCTRL);
-    NRF_LOG_INFO("CLOCK_TRACECONFIG [%x]", NRF_CLOCK->TRACECONFIG);
+    APP_ERROR_CHECK(df_led_init()); 
+    NRFX_LOG_INFO("LED Handler - Initialised"); 
+
 
     NRF_LOG_INFO("DF_DistDev - Main Loop Starting");
 

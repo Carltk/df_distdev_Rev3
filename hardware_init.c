@@ -42,13 +42,11 @@ ret_code_t df_hardware_init(void)
     APP_ERROR_CHECK(nrfx_rng_init(&rng, rng_handler));
     NRFX_LOG_INFO("RNG initialised and started");
 
-    APP_ERROR_CHECK(df_led_init()); 
-    NRFX_LOG_INFO("LED Handler - Initialised"); 
+//    APP_ERROR_CHECK(df_led_init()); 
+//    NRFX_LOG_INFO("LED Handler - Initialised"); 
 
     APP_ERROR_CHECK(df_inputs_init());              // Init the Nozzle handler
     NRFX_LOG_INFO("Nozzle Handler - Initialised"); 
-
-    // APP_ERROR_CHECK(df_mode_init());             // Init the Mode button handler
 
     APP_ERROR_CHECK(df_relay_init());               // Init the Ouput Relay
     NRFX_LOG_INFO("Relay Control - Initialised"); 
@@ -59,8 +57,8 @@ ret_code_t df_hardware_init(void)
     APP_ERROR_CHECK(df_pulser_init());              // Initialise the Pulser Counter
     NRFX_LOG_INFO("Pulser Handler - Initialised");     
 
-//    APP_ERROR_CHECK(df_or_sense_init());              // Initialise the Pulser Counter
-//    NRFX_LOG_INFO("Override Sense Handler - Initialised");     
+    APP_ERROR_CHECK(df_or_sense_init());              // Initialise the Pulser Counter
+    NRFX_LOG_INFO("Override Sense Handler - Initialised");     
 
 
     return ret;
@@ -218,7 +216,7 @@ ret_code_t df_relay_init(void)
 
     // Relay can be normal GPIO
     nrf_gpio_cfg_output(RELAY_PIN);         // Configure the Relay output
-    df_relay_change(RELAY_PIN, 1);          // Start with it turned off    
+    df_relay_change(RELAY_PIN, 0);          // Start with it turned off    
 
     return(ret);
 }

@@ -50,7 +50,7 @@
  * Function for configuring UICR_REGOUT0 register
  * to set GPIO output voltage to 3.0V.
  */
-void gpio_output_voltage_setup(void)
+uint8_t gpio_output_voltage_setup(void)
 {
     // Configure UICR_REGOUT0 register only if it is set to default value.
     if ((NRF_UICR->REGOUT0 & UICR_REGOUT0_VOUT_Msk) ==
@@ -69,7 +69,9 @@ void gpio_output_voltage_setup(void)
 
         // System reset is needed to update UICR registers.
         NVIC_SystemReset();
+        return(1);
     }
+    return(0);
 }
 
 
@@ -89,9 +91,10 @@ void gpio_output_voltage_setup(void)
 //                                  where nn: 0=GPIO (no trace routed to pins all GPIO)
 //                                            1=Serial (SWO routed to pin, all others can be GPIO)
 //                                            2=Parallel (TRACECLK & TRACEDATA(0-3) routed to pins) 
-void ddpc_rev3_configure_debug(void)
+uint8_t ddpc_rev3_configure_debug(void)
 {
-  
+    uint8_t made_changes = 0;
+
     // Default value of APPROTECT is OK .. no need to program    
     // NRF_UICR->APPROTECT = (NRF_UICR->APPROTECT & ~((uint32_t)UICR_APPROTECT_PALL_Msk)) |
     //                       ( UICR_APPROTECT_PALL_Disabled << UICR_APPROTECT_PALL_Pos);    
@@ -105,11 +108,17 @@ void ddpc_rev3_configure_debug(void)
     //                        ( UICR_DEBUGCTRL_CPUNIDEN_Enabled << UICR_DEBUGCTRL_CPUNIDEN_Pos);        
 
     // TraceConfig TRACECONFIG->TRACEMUX .. set to serial mode
-    NRF_CLOCK->TRACECONFIG = (NRF_CLOCK->TRACECONFIG & ~((uint32_t)CLOCK_TRACECONFIG_TRACEMUX_Msk)) |
-                             ( CLOCK_TRACECONFIG_TRACEMUX_Serial << CLOCK_TRACECONFIG_TRACEMUX_Pos);        
-            // #define CLOCK_TRACECONFIG_TRACEMUX_GPIO (0UL) /*!< No trace signals routed to pins. All pins can be used as regular GPIOs. */
-            // #define CLOCK_TRACECONFIG_TRACEMUX_Serial (1UL) /*!< SWO trace signal routed to pin. Remaining pins can be used as regular GPIOs. */
-            // #define CLOCK_TRACECONFIG_TRACEMUX_Parallel (2UL) /*!< All trace signals (TRACECLK and TRACEDATA[n]) routed to pins. */
+    if ((NRF_CLOCK->TRACECONFIG & CLOCK_TRACECONFIG_TRACEMUX_Msk) !=
+                (CLOCK_TRACECONFIG_TRACEMUX_Serial << CLOCK_TRACECONFIG_TRACEMUX_Pos))
+    {
+
+        NRF_CLOCK->TRACECONFIG = (NRF_CLOCK->TRACECONFIG & ~((uint32_t)CLOCK_TRACECONFIG_TRACEMUX_Msk)) |
+                                 ( CLOCK_TRACECONFIG_TRACEMUX_Serial << CLOCK_TRACECONFIG_TRACEMUX_Pos);        
+                // #define CLOCK_TRACECONFIG_TRACEMUX_GPIO (0UL) /*!< No trace signals routed to pins. All pins can be used as regular GPIOs. */
+                // #define CLOCK_TRACECONFIG_TRACEMUX_Serial (1UL) /*!< SWO trace signal routed to pin. Remaining pins can be used as regular GPIOs. */
+                // #define CLOCK_TRACECONFIG_TRACEMUX_Parallel (2UL) /*!< All trace signals (TRACECLK and TRACEDATA[n]) routed to pins. */
+        made_changes = 1;
+    }
 
     // TraceConfig TRACECONFIG->TRACEPORTSPEED (default value is OK)
     // NRF_CLOCK->TRACECONFIG = (NRF_CLOCK->TRACECONFIG & ~((uint32_t)CLOCK_TRACECONFIG_TRACEPORTSPEED_Msk)) |
@@ -118,6 +127,7 @@ void ddpc_rev3_configure_debug(void)
             // #define CLOCK_TRACECONFIG_TRACEPORTSPEED_16MHz (1UL) /*!< 16 MHz trace port clock (TRACECLK = 8 MHz) */
             // #define CLOCK_TRACECONFIG_TRACEPORTSPEED_8MHz (2UL) /*!< 8 MHz trace port clock (TRACECLK = 4 MHz) */
             // #define CLOCK_TRACECONFIG_TRACEPORTSPEED_4MHz (3UL) /*!< 4 MHz trace port clock (TRACECLK = 2 MHz) */
+    return(made_changes);
 }
 
 #endif
