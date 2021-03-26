@@ -208,7 +208,7 @@ ret_code_t nrf_serial_init(nrf_serial_t const * p_serial,
     memcpy(&drv_config, p_drv_uart_config, sizeof(nrfx_uart_config_t));
     drv_config.p_context = (void *)p_serial;
 #if defined(UARTE_PRESENT) && defined(UART_PRESENT)
-    //drv_config.use_easy_dma = (p_config->mode == NRF_SERIAL_MODE_DMA);    // use_easy_dma seems to be legacy driver
+ //   drv_config.use_easy_dma = (p_config->mode == NRF_SERIAL_MODE_DMA);    // use_easy_dma seems to be legacy driver
 #endif
     ret = nrfx_uart_init(&p_serial->instance,
                             &drv_config,

@@ -107,7 +107,7 @@ void app_timer_handle(void * p_context)
 
                     if (flash_control.do_immediate_save)
                     {   StoreImmediate();       }
-
+                    
                     break;
                 case APP_STATE_10S:                             
                     if (flash_control.gc_required)

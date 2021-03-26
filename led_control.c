@@ -16,6 +16,7 @@
 // *** Global Variables ***
 
 bool i2s_running;
+bool i2s_is_dark;
 #define I2S_ERR_TH  10
 uint8_t i2s_errcount;
 
@@ -27,8 +28,6 @@ uint8_t procled_current;                     // Variable to hold currently proce
 
 uint32_t m_buffer_tx[I2S_BUFFER_SIZE];
 uint32_t m_buffer_rx[I2S_BUFFER_SIZE];
-nrfx_i2s_buffers_t m_buffer;
-
 
 // *** static function prototypes ***
 static void i2s_data_handler(nrfx_i2s_buffers_t const * p_released, uint32_t status);
@@ -37,7 +36,7 @@ static void fillBuffers(uint8_t RVal, uint8_t GVal, uint8_t BVal, bool ledState)
 static ret_code_t sendLEDBlocks(proc_led_t * PL, bool ledState);
 static void setLEDOK(bool onlyOK);
 static void setDefaultLEDState(void);
-static bool roll_mask(uint32_t * mask);
+static uint8_t roll_mask(uint32_t * mask);
 static void led_timer_handle(void * p_context);
 
 // *** global function prototypes in header file ***
@@ -61,6 +60,7 @@ ret_code_t df_led_init(void)
     uint8_t i;
 
     i2s_running = false;
+    i2s_is_dark = false;
     i2s_errcount = 0;
 
     i2s_config.sdin_pin = I2S_SDIN_PIN;
@@ -72,16 +72,13 @@ ret_code_t df_led_init(void)
     i2s_config.ratio     = NRF_I2S_RATIO_32X;                                       // < LRCK = MCK / 32.
     i2s_config.channels  = NRF_I2S_CHANNELS_STEREO;
 
-    m_buffer.p_tx_buffer = m_buffer_tx;
-    m_buffer.p_rx_buffer = m_buffer_rx;
-
     if (ret != NRFX_SUCCESS)
     goto IL_x;
-    NRFX_LOG_INFO("i2s module initialised"); 
+//    NRFX_LOG_INFO("i2s module initialised"); 
 
     ret = app_timer_create(&led_timer, APP_TIMER_MODE_REPEATED, led_timer_handle);  // Create an AppTimer for the Led controller
     if (ret != NRFX_SUCCESS) goto IL_x;     
-    NRFX_LOG_INFO("LED Control - app timer created");           
+//    NRFX_LOG_INFO("LED Control - app timer created");           
 
     ret = app_timer_start(led_timer, APP_TIMER_TICKS(LED_MS_PER_TICK), NULL);       // Start the AppTimer
     if (ret != NRFX_SUCCESS) goto IL_x; 
@@ -127,7 +124,7 @@ uint8_t addLEDPattern(const uint8_t * colourAry, uint32_t flashPattern, uint8_t 
         }
     }
 
-    NRFX_LOG_INFO("leds: added pattern at [%d]", thisSlot);                 
+//    NRFX_LOG_INFO("leds: added pattern at [%d]", thisSlot);                 
 
     return(thisSlot);
 }
@@ -136,7 +133,6 @@ void loopLEDPattern(uint8_t topIdx, uint8_t bottomIdx)
 {   procled[topIdx].linkNext = bottomIdx;    
     procled_current = bottomIdx;
 }
-
 
 uint8_t LEDSlot(proc_led_t * PL)
 {   return(slotFromObject(PL, procled, sizeof(proc_led_t)));    }
@@ -198,22 +194,33 @@ static void fillBuffers(uint8_t RVal, uint8_t GVal, uint8_t BVal, bool ledState)
     {   m_buffer_tx[0] = calcChannelVal(GVal);               // ledState ON .. fill with colours from the procLed pattern
         m_buffer_tx[1] = calcChannelVal(RVal);
         m_buffer_tx[2] = calcChannelVal(BVal);
+        i2s_is_dark = false;
+        //NRFX_LOG_INFO("leds: sending [R%d,G%d,B%d]", RVal, GVal, BVal);    
     }
     else
     {   for (uint8_t i=0; i<NUM_COLOURS;i++)                // ledState OFF .. fill all 3 colour values with 0
-        {   m_buffer_tx[i] =  0x88888888;   }
+        {   m_buffer_tx[i] =  0x88888888;   
+            i2s_is_dark = true;
+        }
+        //NRFX_LOG_INFO("leds: sending dark");  
     }
 
     memset(&m_buffer_tx[3], 0x00, (4 * RESET_BITS));    // Clear 6 buffers from [3] onwards to make the >50uS reset pulse
+    
 }
 
 static ret_code_t sendLEDBlocks(proc_led_t * PL, bool ledState)
 {   
     ret_code_t ret = 99;
+    
+    nrfx_i2s_buffers_t m_buffer;
+    m_buffer.p_tx_buffer = m_buffer_tx;
+    m_buffer.p_rx_buffer = m_buffer_rx;
 
     if (!i2s_running)
     {   fillBuffers(PL->colourVal[0], PL->colourVal[1], PL->colourVal[2], ledState);
         ret = nrfx_i2s_start(&m_buffer, I2S_BUFFER_SIZE, 0);
+//        nrf_delay_us(100);
         //NRFX_LOG_INFO("leds: i2s Start");                 
         i2s_running = true;
     }
@@ -242,9 +249,8 @@ static void setDefaultLEDState(void)
 
     // add patterns backwards to capture the nextLink
     a = addLEDPattern(PROC_LED_WHITE, LED_FLASH_OFF, 2, 4, 0xFF);   // Blank 
-    c = addLEDPattern(PROC_LED_MAGENTA, LED_FLASH_ON, 2, 4, a);
+    c = addLEDPattern(PROC_LED_CYAN, LED_FLASH_ON, 2, 4, a);  
     c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_ON, 2, 4, c);  
-    c = addLEDPattern(PROC_LED_CYAN, LED_FLASH_ON, 2, 4, c);  
     c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_ON, 2, 4, c); 
     c = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_ON, 2, 4, c);
     c = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_ON, 2, 4, c);
@@ -253,7 +259,7 @@ static void setDefaultLEDState(void)
     loopLEDPattern(a, c);
 }
 
-static bool roll_mask(uint32_t * mask)
+static uint8_t roll_mask(uint32_t * mask)
 {   uint8_t shifted_bit;
 
     shifted_bit = (char)(*mask & 0x00000001);               // get the lsbit
@@ -267,7 +273,7 @@ static void led_timer_handle(void * p_context)
 {   proc_led_t *PL;   
     uint8_t i;
     uint8_t unusedCnt=0;
-    bool ledState;
+    uint8_t ledState;
 
     UNUSED_PARAMETER(p_context);
 
@@ -276,9 +282,10 @@ static void led_timer_handle(void * p_context)
         if (procled[i].inUse)    
         {   PL = &procled[i];
 
-            ledState = roll_mask(&PL->status.rolledFlashPattern);   // roll the flash pattern
-            if (sendLEDBlocks(PL, ledState))                            // send the colour code (or dark) out the i2s to the LED
-            {    NRFX_LOG_INFO("leds - couldn't send to i2s");    }
+            ledState = roll_mask(&PL->status.rolledFlashPattern);       // roll the flash pattern
+
+            if (ledState || (ledState==0 && !i2s_is_dark))
+            {   sendLEDBlocks(PL, ledState); }
 
             if (PL->status.slotTimeLeft != 0xFF)                     // Check to see if this is an expireable slot
             {   PL->status.slotTimeLeft -= 1;                        // decrement its counter
@@ -307,7 +314,8 @@ static void led_timer_handle(void * p_context)
    
     if (i >= NUM_PROC_LED_SLOTS) procled_current = 0;
     if (procled_current >= NUM_PROC_LED_SLOTS) procled_current = 0;
-    if (unusedCnt >= NUM_PROC_LED_SLOTS) setLEDOK(true);            // if there are no active slots, reinit to OK green flash
+    if (unusedCnt >= NUM_PROC_LED_SLOTS) 
+    {   setLEDOK(true);             }   // if there are no active slots, reinit to OK green flash
 }
 
 

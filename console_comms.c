@@ -39,8 +39,6 @@ static uint16_t DevAddress = 6;
 // Message received from comms
 char rx_buf[RX_BUF_SIZE];    
 rx_data_t rx_data = RX_DATA_DEFAULT;
-#define COMMS_TH_ERR        6
-#define COMMS_TH_NOT_SOH    50
 
 
 // Processed received message (i.e. no SOH, EOF)
@@ -65,8 +63,7 @@ uint8_t make_lrc(char *buf, uint8_t cnt);
 void interpret_msg(msg_data_t *md);
 uint8_t handle_action_cmd(msg_data_t *md, char *buf);
 uint8_t send_attr_bytes(msg_data_t *md, char *buf, char bytes_reqd);
-
-void clear_rx_bufs(void);
+void clear_rx_bufs(struct nrf_serial_s const * p_serial);
 
 // size_t ConsoleWrite(char *buf, uint8_t count);
 
@@ -135,7 +132,7 @@ void comms_evt_handler(struct nrf_serial_s const * p_serial, nrf_serial_event_t 
         case NRF_SERIAL_EVENT_TX_DONE:      //!< Chunk of data has been sent.
             if (nrf_queue_is_empty(&serial_queues_txq))
             {   nrf_gpio_pin_clear(TX_ENABLE);           // turn off the TxEnable pin
-                clear_rx_bufs();
+                clear_rx_bufs(p_serial);
 
                 if (ddpc.nv_immediate.dev_address == DISCOVERY_DFLT_ADDR)     // At the moment only check for collisions in adoption
                 {   if (memcmp(&tx_buf, rx_data.rx_buf, tx_char_count - 1) != 0)                // Check for data collisions
@@ -166,25 +163,27 @@ void comms_evt_handler(struct nrf_serial_s const * p_serial, nrf_serial_event_t 
                 }
             }
             else
-            {   clear_rx_bufs();    }
+            {   clear_rx_bufs(p_serial);    }
 
             break;        
         case NRF_SERIAL_EVENT_DRV_ERR:      //!< Internal driver error.
-            clear_rx_bufs();
+            clear_rx_bufs(p_serial);
+
+            NRF_LOG_INFO("Serial driver error %d", rx_data.err_count); 
 
             if (inc_is_error(&rx_data.err_count, COMMS_TH_ERR))
             {   
-                NRF_LOG_INFO("Serial driver error");            
+                //NRF_LOG_INFO("Serial driver error");            
                 swap_baud(p_serial);    
                 
             }
-            else
-            {   ConsoleSerialPortInit(p_serial);    }          // re-init the serial port & structures
+            //else
+            //{   ConsoleSerialPortInit(p_serial);    }          // re-init the serial port & structures
 
             break;        
         case NRF_SERIAL_EVENT_FIFO_ERR:                     //!< RX FIFO overrun.
             NRF_LOG_INFO("Serial FIFO Err, comms reset");            
-            clear_rx_bufs();
+            clear_rx_bufs(p_serial);
 
             if (inc_is_error(&rx_data.err_count, COMMS_TH_ERR))
             {   swap_baud(p_serial);    }
@@ -296,7 +295,7 @@ msg_state_t get_msg_data(msg_data_t *md, rx_data_t *rd)
             }
         }
 
-        clear_rx_bufs();
+        clear_rx_bufs(&serial_uarte);
         rd->rx_state = RX_IS_IDLE;         // Clear the rx state flag so we can get new messages
     }
 
@@ -409,7 +408,7 @@ void interpret_msg(msg_data_t *md)
     {   
         c = make_lrc(buf, char_cnt);
         buf[char_cnt++] = c;
-        char_cnt = ConsoleWrite(buf, char_cnt);  
+        char_cnt = ConsoleWrite(NULL, buf, char_cnt);  
         
         if (buf[MSGBUF_COMMAND] != 0x02)
         {   NRFX_LOG_INFO("Tx [%d] chars, Cmd [%x]", char_cnt, buf[MSGBUF_COMMAND]);    }
@@ -556,9 +555,9 @@ uint8_t MakeSimpleCRC(uint8_t Byte, uint8_t History)
 }
 
 
-void clear_rx_bufs(void)
+void clear_rx_bufs(struct nrf_serial_s const * p_serial)
 {
-    nrf_serial_rx_drain(&serial_uarte);             // clear out received chars
+    nrf_serial_rx_drain(p_serial);             // clear out received chars
     nrf_queue_reset(&serial_queues_rxq);
     rx_data.rx_buf[0] = 0;                              // Wipe the SOH character from the buffer
     rx_data.rx_buf[(rx_data.rx_char_count - 1)] = 0;    // Wipe the EOF character from the buffer    
@@ -576,11 +575,18 @@ uint8_t IsStuffable(char theChar)
     return(retval);
 }
 
-size_t ConsoleWrite(char *buf, uint8_t count)
+
+size_t ConsoleWrite(struct nrf_serial_s const * p_serial, char *buf, uint8_t count)
 {   size_t sent = 0;
     tx_char_count = 0;
+    struct nrf_serial_s const * tp_serial;
 
-    clear_rx_bufs();
+    if (p_serial == NULL)
+    {   tp_serial = &serial_uarte;  }
+    else
+    {   tp_serial = p_serial; }
+
+    clear_rx_bufs(tp_serial);
     
     tx_buf[tx_char_count++] = SOH_CHAR;
 
@@ -598,7 +604,7 @@ size_t ConsoleWrite(char *buf, uint8_t count)
 
     nrf_gpio_pin_set(TX_ENABLE);          // Activate  TxEnable pin
 
-    nrf_serial_write(&serial_uarte, tx_buf, tx_char_count, &sent, NRF_SERIAL_MAX_TIMEOUT);
+    nrf_serial_write(tp_serial, tx_buf, tx_char_count, &sent, NRF_SERIAL_MAX_TIMEOUT);
     //nrf_serial_write(&serial_uarte, tx_buf, tx_char_count, &sent, 0);
     // nrf_serial_flush(&serial_uarte, 2);
 
@@ -611,6 +617,9 @@ size_t ConsoleWrite(char *buf, uint8_t count)
 
 ret_code_t swap_baud(struct nrf_serial_s const * p_serial)
 {   ret_code_t ret; 
+
+    return(ret);
+
 
     wrapping_inc((uint32_t*)&rx_data.baud_index, 0, NUM_BAUD_RATES);
     NRF_LOG_INFO("Baud rate changed to index %d = %d", rx_data.baud_index, baud_list[rx_data.baud_index]);

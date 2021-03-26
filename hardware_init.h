@@ -72,17 +72,20 @@ extern nrfx_timer_t pulse_counter;
 #define TX_PIN_NUMBER  NRF_GPIO_PIN_MAP(0,28)
 #define TX_ENABLE      NRF_GPIO_PIN_MAP(0,31)       
 
-// *** Comms (Port 2) ***
-#define RX2_PIN_NUMBER  NRF_GPIO_PIN_MAP(0,13)  
-#define TX2_PIN_NUMBER  NRF_GPIO_PIN_MAP(0,15)
+//#define RX_PIN_NUMBER  SPARE_1_PIN
+//#define TX_PIN_NUMBER  SPARE_2_PIN 
+//#define TX_ENABLE      SPARE_3_PIN
 
 
-// Need to check how to implement RS485 TxEnable signalling
-// https://devzone.nordicsemi.com/f/nordic-q-a/46911/rs485-transmit-enable
+#define RTS_PIN_NUMBER TX_ENABLE
 
 #define CTS_PIN_NUMBER NRF_GPIO_PIN_MAP(1,01)    // set these to unused pins (flow control is off so the pins won't be used) 1.01 is Module Pin 61
 //#define RTS_PIN_NUMBER NRF_GPIO_PIN_MAP(0,15)    // is RTS enough to enable txEnable on rs485?
-#define RTS_PIN_NUMBER TX_ENABLE
+
+
+// *** Comms (Port 2) ***
+//#define RX2_PIN_NUMBER  NRF_GPIO_PIN_MAP(0,13)  
+// #define TX2_PIN_NUMBER  NRF_GPIO_PIN_MAP(0,15)
 
 #define HWFC           true                    // hardware flow control
 

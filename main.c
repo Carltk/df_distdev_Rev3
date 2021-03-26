@@ -80,9 +80,6 @@
 #define OP_QUEUES_SIZE          3
 #define APP_TIMER_PRESCALER     NRF_SERIAL_APP_TIMER_PRESCALER  
 
-// ### function protoypes ###
-void dongle_psu_reg_init();
-
 
 int main(void)
 {   ret_code_t ret; 
@@ -120,11 +117,9 @@ int main(void)
     ddpc.nv_panic.boot_count += 1;                      // inc the boot count
     flash_control.need_panic_save = true;
 
-    APP_ERROR_CHECK(df_led_init()); 
-    NRFX_LOG_INFO("LED Handler - Initialised"); 
-
-
     NRF_LOG_INFO("DF_DistDev - Main Loop Starting");
+
+    ConsoleWrite(NULL, "Hello DDPC", 10);
 
     while (true)
     {

@@ -84,6 +84,9 @@ typedef struct
 extern char rx_buf[RX_BUF_SIZE];    
 extern rx_data_t rx_data;    
 
+#define COMMS_TH_ERR        6
+#define COMMS_TH_NOT_SOH    50
+
 #define RX_DATA_DEFAULT                         \
 {   .baud_index = 1,                            \
     .discovery_holdoff = 0x04,                  \
@@ -127,10 +130,8 @@ typedef struct
 // *** Function prototypes ***
 //ret_code_t ConsoleSerialPortInit(bool first_time);
 ret_code_t ConsoleSerialPortInit(struct nrf_serial_s const * p_serial);
-size_t ConsoleWrite(char *buf, uint8_t count);
-void comms_clear(void);
-
-
+size_t ConsoleWrite(struct nrf_serial_s const * p_serial, char *buf, uint8_t count);
+// void comms_clear(void);
 
 
 
