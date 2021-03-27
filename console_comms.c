@@ -381,12 +381,11 @@ void interpret_msg(msg_data_t *md)
         case FD_CMD_IDENT:
             if (buf[MSGBUF_PAYLOAD] & IDENT_LED)
             {   
-               /* 
+                wipeAllLEDSlots();
                 a = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_MED, 8, 32, 0xFF);
                 c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_MED, 8, 32, a);
                 c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_MED, 8, 32, c);
                 loopLEDPattern(a, c);
-                */
             }
 
             if (buf[MSGBUF_PAYLOAD] & IDENT_RELAY)
@@ -618,10 +617,8 @@ size_t ConsoleWrite(struct nrf_serial_s const * p_serial, char *buf, uint8_t cou
 ret_code_t swap_baud(struct nrf_serial_s const * p_serial)
 {   ret_code_t ret; 
 
-    return(ret);
-
-
-    wrapping_inc((uint32_t*)&rx_data.baud_index, 0, NUM_BAUD_RATES);
+    // TODO - reimplement baud swapping
+    // wrapping_inc((uint32_t*)&rx_data.baud_index, 0, NUM_BAUD_RATES);
     NRF_LOG_INFO("Baud rate changed to index %d = %d", rx_data.baud_index, baud_list[rx_data.baud_index]);
     
     ret = nrf_serial_uninit(p_serial);   
