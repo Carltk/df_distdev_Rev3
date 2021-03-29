@@ -220,7 +220,7 @@ static ret_code_t sendLEDBlocks(proc_led_t * PL, bool ledState)
     if (!i2s_running)
     {   fillBuffers(PL->colourVal[0], PL->colourVal[1], PL->colourVal[2], ledState);
         ret = nrfx_i2s_start(&m_buffer, I2S_BUFFER_SIZE, 0);
-//        nrf_delay_us(100);
+        nrf_delay_ms(1);
         //NRFX_LOG_INFO("leds: i2s Start");                 
         i2s_running = true;
     }
@@ -248,8 +248,9 @@ static void setDefaultLEDState(void)
     wipeAllLEDSlots();
 
     // add patterns backwards to capture the nextLink
-    a = addLEDPattern(PROC_LED_WHITE, LED_FLASH_OFF, 2, 4, 0xFF);   // Blank 
-    c = addLEDPattern(PROC_LED_CYAN, LED_FLASH_ON, 2, 4, a);  
+    a = addLEDPattern(PROC_LED_WHITE, LED_FLASH_OFF, 4, 8, 0xFF);   // Blank 
+    c = addLEDPattern(PROC_LED_WHITE, LED_FLASH_ON, 2, 4, a);   
+    c = addLEDPattern(PROC_LED_CYAN, LED_FLASH_ON, 2, 4, c);  
     c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_ON, 2, 4, c);  
     c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_ON, 2, 4, c); 
     c = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_ON, 2, 4, c);

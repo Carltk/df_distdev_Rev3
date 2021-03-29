@@ -38,7 +38,7 @@ static uint16_t DevAddress = 6;
 
 // Message received from comms
 char rx_buf[RX_BUF_SIZE];    
-rx_data_t rx_data = RX_DATA_DEFAULT;
+con_comms_t con_comms = RX_DATA_DEFAULT;
 
 
 // Processed received message (i.e. no SOH, EOF)
@@ -55,10 +55,10 @@ uint8_t tx_char_count;
 
 void comms_evt_handler(struct nrf_serial_s const * p_serial, nrf_serial_event_t event);
 ret_code_t swap_baud(struct nrf_serial_s const * p_serial);
-rx_state_t get_comm_state(rx_data_t *rd);
-void rx_data_handler(rx_data_t *rd, char c);
-msg_state_t get_msg_data(msg_data_t *md, rx_data_t *rd);
-bool is_checksum_ok(rx_data_t *rd);
+rx_state_t get_comm_state(con_comms_t *rd);
+void con_comms_handler(con_comms_t *rd, char c);
+msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd);
+bool is_checksum_ok(con_comms_t *rd);
 uint8_t make_lrc(char *buf, uint8_t cnt);
 void interpret_msg(msg_data_t *md);
 uint8_t handle_action_cmd(msg_data_t *md, char *buf);
@@ -100,6 +100,8 @@ uint32_t baud_list[NUM_BAUD_RATES] = BAUD_LIST;
 ret_code_t ConsoleSerialPortInit(struct nrf_serial_s const * p_serial)
 {   ret_code_t ret = NRFX_SUCCESS;
 
+    con_comms.comms_state = COMMS_INIT;
+
     if (p_serial == NULL)
     {   nrf_gpio_cfg_output(TX_ENABLE);               // Configure the TxEnable output
         p_serial = &serial_uarte;
@@ -118,6 +120,8 @@ ret_code_t ConsoleSerialPortInit(struct nrf_serial_s const * p_serial)
 
     NRFX_LOG_INFO("Serial (IntBus) Port - Initialised at baud [%d]", m_uarte0_drv_config.baudrate); 
 
+    con_comms.comms_state = COMMS_DISCONNECTED;
+
     return(ret);
 }
 
@@ -135,10 +139,10 @@ void comms_evt_handler(struct nrf_serial_s const * p_serial, nrf_serial_event_t 
                 clear_rx_bufs(p_serial);
 
                 if (ddpc.nv_immediate.dev_address == DISCOVERY_DFLT_ADDR)     // At the moment only check for collisions in adoption
-                {   if (memcmp(&tx_buf, rx_data.rx_buf, tx_char_count - 1) != 0)                // Check for data collisions
-                    {   rx_data.tx_collision = 1;   }                                           // Flag if found
+                {   if (memcmp(&tx_buf, con_comms.rx_buf, tx_char_count - 1) != 0)                // Check for data collisions
+                    {   con_comms.tx_collision = 1;   }                                           // Flag if found
                     else
-                    {   ddpc.nv_immediate.dev_address = rx_data.discovery_temp_addr;     }                       // No collision .. set the address to the temporary Adoption address
+                    {   ddpc.nv_immediate.dev_address = con_comms.discovery_temp_addr;     }                       // No collision .. set the address to the temporary Adoption address
                 }
             }
             break;
@@ -147,19 +151,23 @@ void comms_evt_handler(struct nrf_serial_s const * p_serial, nrf_serial_event_t 
             //ret = nrf_serial_read(p_serial, &c, sizeof(c), &chars_read, 0);
             if (ret == NRFX_SUCCESS)
             {   
-                if ((rx_data.rx_char_count == 0) && (c != SOH_CHAR))
-                {   if (inc_is_error(&rx_data.err_count, COMMS_TH_NOT_SOH))
+                if ((con_comms.rx_char_count == 0) && (c != SOH_CHAR))
+                {   if (inc_is_error(&con_comms.err_count, COMMS_TH_NOT_SOH))
                     {   NRF_LOG_INFO("Too many Serial errors [%d]", COMMS_TH_NOT_SOH);            
                         swap_baud(p_serial);    }
                     break;
                 }
             
                 if (nrf_gpio_pin_read(TX_ENABLE) == 0)      // Only receive data when I'm not transmitting
-                {   rx_data_handler(&rx_data, c);  }
+                {   con_comms_handler(&con_comms, c);  }
 
-                if (get_comm_state(&rx_data) == RX_GOT_EOF)
-                {   rx_data.err_count = 0;
-                    get_msg_data(&msg_data, &rx_data);
+                if (get_comm_state(&con_comms) == RX_GOT_EOF)
+                {   
+                    if (con_comms.comms_state < COMMS_VISIBLE) 
+                    {   con_comms.comms_state = COMMS_VISIBLE;  }
+                
+                    con_comms.err_count = 0;
+                    get_msg_data(&msg_data, &con_comms);
                 }
             }
             else
@@ -168,24 +176,23 @@ void comms_evt_handler(struct nrf_serial_s const * p_serial, nrf_serial_event_t 
             break;        
         case NRF_SERIAL_EVENT_DRV_ERR:      //!< Internal driver error.
             clear_rx_bufs(p_serial);
+            con_comms.comms_state = COMMS_ERROR;
 
-            NRF_LOG_INFO("Serial driver error %d", rx_data.err_count); 
-
-            if (inc_is_error(&rx_data.err_count, COMMS_TH_ERR))
-            {   
-                //NRF_LOG_INFO("Serial driver error");            
-                swap_baud(p_serial);    
-                
-            }
-            //else
-            //{   ConsoleSerialPortInit(p_serial);    }          // re-init the serial port & structures
+            if (inc_is_error(&con_comms.err_count, COMMS_TH_ERR))
+            {   swap_baud(p_serial);        }
+            else
+            {   ConsoleSerialPortInit(p_serial);    
+                NRF_LOG_INFO("Serial driver error, re-init");                        
+            }          // re-init the serial port & structures
 
             break;        
         case NRF_SERIAL_EVENT_FIFO_ERR:                     //!< RX FIFO overrun.
             NRF_LOG_INFO("Serial FIFO Err, comms reset");            
             clear_rx_bufs(p_serial);
 
-            if (inc_is_error(&rx_data.err_count, COMMS_TH_ERR))
+            con_comms.comms_state = COMMS_ERROR;
+
+            if (inc_is_error(&con_comms.err_count, COMMS_TH_ERR))
             {   swap_baud(p_serial);    }
             else
             {   ConsoleSerialPortInit(p_serial);    }          // re-init the serial port & structures
@@ -197,10 +204,10 @@ void comms_evt_handler(struct nrf_serial_s const * p_serial, nrf_serial_event_t 
     }
 }
 
-rx_state_t get_comm_state(rx_data_t *rd)
+rx_state_t get_comm_state(con_comms_t *rd)
 {   return(rd->rx_state);   }
 
-void rx_data_handler(rx_data_t *rd, char c)
+void con_comms_handler(con_comms_t *rd, char c)
 {   char d = c;
 
     switch (rd->rx_state)
@@ -232,7 +239,7 @@ no_save:
     return;
 }
 
-msg_state_t get_msg_data(msg_data_t *md, rx_data_t *rd)
+msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
 {
     msg_state_t retval = MSG_INCOMPLETE;
 
@@ -246,11 +253,15 @@ msg_state_t get_msg_data(msg_data_t *md, rx_data_t *rd)
             {   md->msg_addr = buf2int(&rd->rx_buf[RXBUF_ADDR]);              // grab the address from the message
 
                 if (md->msg_addr == DISCOVERY_DFLT_ADDR)                        // If it's the Adoption address
-                {   if (ddpc.nv_immediate.dev_address & 0xFF00)                 // and only if we haven't got a real (adopted) address
+                {   
+                    if (con_comms.comms_state < COMMS_ADOPTING)
+                    {    con_comms.comms_state = COMMS_ADOPTING;    }
+
+                    if (ddpc.nv_immediate.dev_address & 0xFF00)                 // and only if we haven't got a real (adopted) address
                     {   NRF_LOG_INFO("Comms Discovery, Holdoff [%d]", rd->discovery_holdoff);                                  
                         if (rd->rx_buf[RXBUF_COMMAND] == FD_CMD_DISCOVER)       // -> Only respond to Discovery commands
-                        {   rd->discovery_holdoff -= 1;                         // -> dec the holdoff counter
-                            
+                        {   
+                            rd->discovery_holdoff -= 1;                         // -> dec the holdoff counter
                             if (!rd->discovery_holdoff)                         //   .. if we get to 0
                             {   NRF_LOG_INFO("Got Comms Discovery, addr [%x:%x]. Cmd [%x]", md->msg_addr, ddpc.nv_immediate.dev_address, rd->rx_buf[RXBUF_COMMAND]);                                  
                                 md->msg_state = retval = MSG_COMPLETE;          //    -> answer the message
@@ -333,6 +344,12 @@ void interpret_msg(msg_data_t *md)
             send_resp = true;
             buf[char_cnt++] = ((comp_type == 0) ? pump.pump_status : components.comp_status);     // send the correct status for the message devicetype
             buf[char_cnt++] = ((comp_type == 0) ? pump.pump_state : 0);                            // send the correct state for the message devicetype
+            
+            if (ddpc.nv_immediate.dev_address & 0xFF00)                                         // If it's a temporary address .. set to "FOSTERED"
+            {    con_comms.comms_state = COMMS_FOSTERED;     }
+            else
+            {    con_comms.comms_state = COMMS_ONLINE;   }                                      // Permanent address .. set to ONLINE
+            
             break;
         //case FD_CMD_WRATTR_BYTE: 	// Write Attribute byte
         //    break;
@@ -362,11 +379,11 @@ void interpret_msg(msg_data_t *md)
             NRFX_LOG_INFO("Unknown Command Rx [%x]", md->msg_buf[MSGBUF_COMMAND]);
             break;
         case FD_CMD_DISCOVER:
-            rx_data.discovery_temp_addr = buf2int(&md->msg_buf[MSGBUF_PAYLOAD]);    // Message contains the temporary address 0xFF<TempIndex> in payload (also capture the temporary address)
+            con_comms.discovery_temp_addr = buf2int(&md->msg_buf[MSGBUF_PAYLOAD]);    // Message contains the temporary address 0xFF<TempIndex> in payload (also capture the temporary address)
             ddpc.nv_immediate.dev_address = buf2int(&md->msg_buf[MSGBUF_PAYLOAD]);  // Message contains the temporary address 0xFF<TempIndex> in payload (also capture the temporary address)
             flash_control.do_immediate_save = true;
 
-            int2buf(&buf[MSGBUF_ADDR], rx_data.discovery_temp_addr);                // we will respond FROM that message .. swap address payload into output address field
+            int2buf(&buf[MSGBUF_ADDR], con_comms.discovery_temp_addr);                // we will respond FROM that message .. swap address payload into output address field
             
             NRFX_LOG_INFO("DDPC Addr changed to [%x]", ddpc.nv_immediate.dev_address);
             
@@ -504,7 +521,7 @@ uint8_t send_attr_bytes(msg_data_t *md, char *buf, char bytes_reqd)
 }
 
 
-bool is_checksum_ok(rx_data_t *rd)
+bool is_checksum_ok(con_comms_t *rd)
 {
     uint8_t i;
     uint8_t lrc;
@@ -558,10 +575,10 @@ void clear_rx_bufs(struct nrf_serial_s const * p_serial)
 {
     nrf_serial_rx_drain(p_serial);             // clear out received chars
     nrf_queue_reset(&serial_queues_rxq);
-    rx_data.rx_buf[0] = 0;                              // Wipe the SOH character from the buffer
-    rx_data.rx_buf[(rx_data.rx_char_count - 1)] = 0;    // Wipe the EOF character from the buffer    
-    rx_data.rx_char_count = 0;
-    rx_data.rx_state = RX_IS_IDLE;
+    con_comms.rx_buf[0] = 0;                              // Wipe the SOH character from the buffer
+    con_comms.rx_buf[(con_comms.rx_char_count - 1)] = 0;    // Wipe the EOF character from the buffer    
+    con_comms.rx_char_count = 0;
+    con_comms.rx_state = RX_IS_IDLE;
     
 }
 
@@ -618,9 +635,11 @@ ret_code_t swap_baud(struct nrf_serial_s const * p_serial)
 {   ret_code_t ret; 
 
     // TODO - reimplement baud swapping
-    // wrapping_inc((uint32_t*)&rx_data.baud_index, 0, NUM_BAUD_RATES);
-    NRF_LOG_INFO("Baud rate changed to index %d = %d", rx_data.baud_index, baud_list[rx_data.baud_index]);
+    // wrapping_inc((uint32_t*)&con_comms.baud_index, 0, NUM_BAUD_RATES);
+    NRF_LOG_INFO("Baud rate changed to index %d = %d", con_comms.baud_index, baud_list[con_comms.baud_index]);
     
+    con_comms.comms_state = COMMS_AUTOBAUD;
+
     ret = nrf_serial_uninit(p_serial);   
     if (ret != NRFX_SUCCESS)
     {    NRFX_LOG_INFO("Serial uninit failure [%x]", ret);  }
@@ -631,7 +650,46 @@ ret_code_t swap_baud(struct nrf_serial_s const * p_serial)
     if (ret != NRFX_SUCCESS)
     {    NRFX_LOG_INFO("Serial 1st init failure [%x]", ret);  }
 
-    nrf_uart_baudrate_set(p_serial->instance.p_reg, baud_list[rx_data.baud_index]);   
+    nrf_uart_baudrate_set(p_serial->instance.p_reg, baud_list[con_comms.baud_index]);   
 
     return(ret);
 }
+
+uint8_t makeCommsStatusFlashes(uint8_t idx, uint8_t commsStatus)
+{   uint8_t c;
+
+    switch (commsStatus)
+    {   case COMMS_INIT:
+            c = addLEDPattern(PROC_LED_WHITE, LED_SINGLE_FLASH, 8, 16, idx);  
+            break;
+        case COMMS_ERROR:
+            c = addLEDPattern(PROC_LED_RED, LED_DOUBLE_FLASH, 16, 32, idx);    
+            break;
+        case COMMS_DISCONNECTED:
+            c = addLEDPattern(PROC_LED_MAGENTA, LED_SINGLE_FLASH, 8, 16, idx);
+            break;
+        case COMMS_AUTOBAUD:
+            c = addLEDPattern(PROC_LED_MAGENTA, LED_DOUBLE_FLASH, 16, 32, idx);
+            break;
+        case COMMS_VISIBLE:
+            c = addLEDPattern(PROC_LED_YELLOW, LED_DOUBLE_FLASH, 16, 32, idx);
+            break;
+        case COMMS_ADOPTING: 
+            c = addLEDPattern(PROC_LED_ORANGE, LED_DOUBLE_FLASH, 16, 32, idx);
+            break;
+        case COMMS_FOSTERED:
+            c = addLEDPattern(PROC_LED_GREEN, LED_SINGLE_FLASH, 8, 16, idx);
+            break;
+        case COMMS_ONLINE:
+            c = addLEDPattern(PROC_LED_GREEN, LED_DOUBLE_FLASH, 16, 32, idx);
+            break;
+        default:
+            c = addLEDPattern(PROC_LED_RED, LED_SINGLE_FLASH, 8, 16, idx);
+            break;
+    }
+
+    c = addLEDPattern(PROC_LED_BLUE, LED_SINGLE_FLASH, 8, 16, c);
+
+    return(c);
+}
+

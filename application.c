@@ -163,26 +163,27 @@ void handle_push_button(void)
 void makeSysStatusFlashes(void)
 {
     uint8_t a, c;
-
+    
     wipeAllLEDSlots();
 
     // explode the hardware status block into LED flashes
 
 
     // add patterns backwards to capture the nextLink
+/*
     a = addLEDPattern(PROC_LED_GREEN, LED_DOUBLE_FLASH, 16, 32, 0xFF);    
     c = addLEDPattern(PROC_LED_MAGENTA, LED_FLASH_ON, 2, 4, a);
 
     c = addLEDPattern(PROC_LED_GREEN, LED_DOUBLE_FLASH, 16, 32, c);    
-    c = addLEDPattern(PROC_LED_BLUE, LED_SINGLE_FLASH, 8, 16, c);
-
-    c = addLEDPattern(PROC_LED_GREEN, LED_DOUBLE_FLASH, 16, 32, c);    
+    c = addLEDPattern(PROC_LED_RED, LED_SINGLE_FLASH, 8, 16, c);
+*/
+    a = addLEDPattern(PROC_LED_GREEN, LED_DOUBLE_FLASH, 16, 32, 0xFF);    
     c = addLEDPattern(PROC_LED_ORANGE, LED_SINGLE_FLASH, 8, 16, c);
     
-    c = addLEDPattern(PROC_LED_GREEN, LED_DOUBLE_FLASH, 16, 32, c);    // Double 4/8s flash (on/off/on/off) & do it twice
-    c = addLEDPattern(PROC_LED_CYAN, LED_SINGLE_FLASH, 8, 16, c);      // Single 4/8s flash, wait 4/8s & do it twice
+    c = makeCommsStatusFlashes(c, con_comms.comms_state);
 
     loopLEDPattern(a, c);       // Write the loop-back index into the first pattern block & init the pattern
+
 }
 
 
@@ -224,7 +225,7 @@ void do_factory_default(bool SuperDflt)
 {   ddpc.nv_immediate.dev_address = DISCOVERY_DFLT_ADDR;
     flash_control.do_immediate_save = true;
 
-    rx_data.discovery_temp_addr = DISCOVERY_DFLT_ADDR;
+    con_comms.discovery_temp_addr = DISCOVERY_DFLT_ADDR;
     update_rng();
 
     NRFX_LOG_INFO("*** Factory Default Done (All-delete=%d) ***", SuperDflt);

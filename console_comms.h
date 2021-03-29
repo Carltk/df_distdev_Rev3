@@ -61,6 +61,17 @@
     #define PUMP_CMD_ALL_LIGHTS_OFF 0xFB // NoResp (32)
 
 
+typedef enum {
+    COMMS_INIT = 0,                     // Comms starting
+    COMMS_ERROR,                        // Comms errors
+    COMMS_DISCONNECTED,                 // No comms visible
+    COMMS_AUTOBAUD,                     // Comms autobauding
+    COMMS_VISIBLE,                      // Comms visible but no messages for me
+    COMMS_ADOPTING,                     // Adoption in-process 
+    COMMS_FOSTERED,                     // Partial adoption (temporary address) but not complete
+    COMMS_ONLINE                        // Online, getting polling messages
+} comms_state_t;
+
 
 typedef enum {
     RX_IS_IDLE = 0,
@@ -70,7 +81,9 @@ typedef enum {
 } rx_state_t;
 
 typedef struct 
-{   uint8_t baud_index;             // Index of the baud rate into BAUD_LIST
+{   
+    comms_state_t comms_state;      // State of the connection to the Console
+    uint8_t baud_index;             // Index of the baud rate into BAUD_LIST
     uint8_t  discovery_holdoff;     // a (randomised) counter to skip address discovery requests
     uint16_t discovery_temp_addr;   // In discovery mode, holds the new temp address until a succesful response is send (and the real address can be changed to this one)
     rx_state_t rx_state;            // Status of the Comms receiver
@@ -79,16 +92,17 @@ typedef struct
     
     uint8_t tx_collision;          // Flag to show that there was a bus collision
     uint8_t err_count;
-} rx_data_t;
+} con_comms_t;
 
 extern char rx_buf[RX_BUF_SIZE];    
-extern rx_data_t rx_data;    
+extern con_comms_t con_comms;    
 
 #define COMMS_TH_ERR        6
 #define COMMS_TH_NOT_SOH    50
 
 #define RX_DATA_DEFAULT                         \
-{   .baud_index = 1,                            \
+{   .comms_state = 0,                           \
+    .baud_index = 1,                            \
     .discovery_holdoff = 0x04,                  \
     .discovery_temp_addr = DISCOVERY_DFLT_ADDR, \
     .rx_state = RX_IS_IDLE,                     \
@@ -131,6 +145,7 @@ typedef struct
 //ret_code_t ConsoleSerialPortInit(bool first_time);
 ret_code_t ConsoleSerialPortInit(struct nrf_serial_s const * p_serial);
 size_t ConsoleWrite(struct nrf_serial_s const * p_serial, char *buf, uint8_t count);
+uint8_t makeCommsStatusFlashes(uint8_t idx, uint8_t commsStatus);
 // void comms_clear(void);
 
 
