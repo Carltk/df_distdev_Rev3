@@ -127,6 +127,8 @@ typedef struct
 
     // Outputs
     uint8_t relay[NUM_RELAYS];
+    uint8_t relay_test[NUM_RELAYS];     // Variable to hold a test timeout
+    
     uint8_t gpout[NUM_GPOS];
 
 } hardware_t;

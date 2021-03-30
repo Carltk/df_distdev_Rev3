@@ -632,6 +632,8 @@ ret_code_t nrf_serial_rx_drain(nrf_serial_t const * p_serial)
     nrf_mtx_unlock(&p_serial->p_ctx->read_lock);
     return NRF_SUCCESS;
 }
+
+
 #else
 ret_code_t nrf_serial_init(nrf_serial_t const * p_serial,
                            nrfx_uart_config_t const * p_drv_uart_config,

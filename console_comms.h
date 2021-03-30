@@ -4,6 +4,7 @@
 
 #include "app_error.h"
 #include "df_nrf_serial.h"
+#include "nrfx_uarte.h"
 
 
 #define NUM_BAUD_RATES 5
@@ -142,9 +143,34 @@ typedef struct
 
 
 // *** Function prototypes ***
-//ret_code_t ConsoleSerialPortInit(bool first_time);
+
+/**
+ * @brief Function to initialise & reset serial port
+ *
+ * @param * p_serial    pointer to a Serial port instance variable
+ * @return              Standard error code.
+ * */
 ret_code_t ConsoleSerialPortInit(struct nrf_serial_s const * p_serial);
+
+/**
+ * @brief Function to send data out of the serial port
+ *
+ * @param * p_serial    pointer to a Serial port instance variable
+ * @param * buf         pointer to a character buffer holding the data to send
+ * @param count         number of characters to send
+ * @return          Standard error code.
+ * */
 size_t ConsoleWrite(struct nrf_serial_s const * p_serial, char *buf, uint8_t count);
+
+
+/**
+ * @brief Function to make comms status flash pattern based on the current comms state
+ *
+ * @param idx       feed-in flash pattern index
+ * @param * buf         pointer to a character buffer holding the data to send
+ * @param count         number of characters to send
+ * @return          Standard error code.
+ * */
 uint8_t makeCommsStatusFlashes(uint8_t idx, uint8_t commsStatus);
 // void comms_clear(void);
 

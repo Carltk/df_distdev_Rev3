@@ -108,6 +108,12 @@ void app_timer_handle(void * p_context)
                     if (flash_control.do_immediate_save)
                     {   StoreImmediate();       }
                     
+                    if (hardware.relay_test[0] > 0)                     // Are we in relay test mode ?
+                    {   hardware.relay_test[0] -= 1;                        // if so .. time it down
+                        if (hardware.relay_test[0] == 0)                // Once it's back to 0
+                        {   df_relay_change(hardware.relay[0], 0);  }   // .. turn the relay off
+                    }
+
                     break;
                 case APP_STATE_10S:                             
                     if (flash_control.gc_required)

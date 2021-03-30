@@ -97,6 +97,15 @@ NRF_SERIAL_UART_DEF(serial_uarte, 0);
 
 uint32_t baud_list[NUM_BAUD_RATES] = BAUD_LIST;
 
+
+ret_code_t ConsoleCommsPortCheck(NULL)
+{
+
+
+
+
+}
+
 ret_code_t ConsoleSerialPortInit(struct nrf_serial_s const * p_serial)
 {   ret_code_t ret = NRFX_SUCCESS;
 
@@ -116,9 +125,9 @@ ret_code_t ConsoleSerialPortInit(struct nrf_serial_s const * p_serial)
 
     ret = nrf_serial_init(p_serial, &m_uarte0_drv_config, &serial_config);
     if (ret != NRFX_SUCCESS)
-    {    NRFX_LOG_INFO("Serial 1st init failure [%x]", ret);  }
+    {    NRFX_LOG_INFO("Serial init failure [%x]", ret);  }
 
-    NRFX_LOG_INFO("Serial (IntBus) Port - Initialised at baud [%d]", m_uarte0_drv_config.baudrate); 
+    // NRFX_LOG_INFO("Serial (IntBus) Port - Initialised at baud [%d]", m_uarte0_drv_config.baudrate); 
 
     con_comms.comms_state = COMMS_DISCONNECTED;
 
@@ -130,6 +139,7 @@ void comms_evt_handler(struct nrf_serial_s const * p_serial, nrf_serial_event_t 
     ret_code_t ret;
     char c;
     uint32_t chars_read;
+    uint32_t err = 0;
 
     switch (event)
     {
@@ -153,7 +163,7 @@ void comms_evt_handler(struct nrf_serial_s const * p_serial, nrf_serial_event_t 
             {   
                 if ((con_comms.rx_char_count == 0) && (c != SOH_CHAR))
                 {   if (inc_is_error(&con_comms.err_count, COMMS_TH_NOT_SOH))
-                    {   NRF_LOG_INFO("Too many Serial errors [%d]", COMMS_TH_NOT_SOH);            
+                    {   // NRF_LOG_INFO("Too many Serial errors [%d]", COMMS_TH_NOT_SOH);            
                         swap_baud(p_serial);    }
                     break;
                 }
@@ -179,10 +189,13 @@ void comms_evt_handler(struct nrf_serial_s const * p_serial, nrf_serial_event_t 
             con_comms.comms_state = COMMS_ERROR;
 
             if (inc_is_error(&con_comms.err_count, COMMS_TH_ERR))
-            {   swap_baud(p_serial);        }
+            {   //test_serial_rx();           
+                swap_baud(p_serial);        
+            }
             else
-            {   ConsoleSerialPortInit(p_serial);    
-                NRF_LOG_INFO("Serial driver error, re-init");                        
+            {   
+                ConsoleSerialPortInit(p_serial);    
+                NRF_LOG_INFO("Serial driver error [%x], re-init", err);                        
             }          // re-init the serial port & structures
 
             break;        
@@ -202,6 +215,20 @@ void comms_evt_handler(struct nrf_serial_s const * p_serial, nrf_serial_event_t 
             
             break;
     }
+}
+
+
+test_serial_rx()
+{
+    // Uninit the serial port
+
+    // read the value of the Rx Pin 
+
+    // Set a flag for the application timer to the retest
+
+    // 
+
+
 }
 
 rx_state_t get_comm_state(con_comms_t *rd)
@@ -406,7 +433,12 @@ void interpret_msg(msg_data_t *md)
             }
 
             if (buf[MSGBUF_PAYLOAD] & IDENT_RELAY)
-            {         }
+            {   if (pump.pump_state == PUMP_STATE_IDLE)         // Only init Relay test if the Pump controller is Idle
+                {   hardware.relay_test[0] = 5;                 // relay test will run for for 5 seconds (application second timer will turn it off)
+                    df_relay_change(hardware.relay[0], 1);      // trun the relay on
+                }
+            }
+
             break;     
         case FD_CMD_ACTION:
             c = handle_action_cmd(md, &buf[char_cnt]);        // act on the command (return val is the size of the reply msg (0 for no reply))

@@ -48,6 +48,7 @@ extern "C" {
 #include <stdbool.h>
 
 #include "nrfx_uart.h"
+#include "nrfx_uarte.h"
 #include "nrf_queue.h"
 #include "nrf_mtx.h"
 #include "app_timer.h"
@@ -388,6 +389,7 @@ ret_code_t nrf_serial_tx_abort(nrf_serial_t const * p_serial);
  * @return Standard error code.
  * */
 ret_code_t nrf_serial_rx_drain(nrf_serial_t const * p_serial);
+
 
 /** @} */
 
