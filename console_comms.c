@@ -29,17 +29,14 @@
 #define RXBUF_PAYLOAD   5
 
 
-// -- etc --    
-
-
 // *** vars and structures ***
+static uint16_t DevAddress = DISCOVERY_DFLT_ADDR;
 
-static uint16_t DevAddress = 6;
+uint32_t baud_list[NUM_BAUD_RATES] = BAUD_LIST;
 
 // Message received from comms
 char rx_buf[RX_BUF_SIZE];    
 con_comms_t con_comms = RX_DATA_DEFAULT;
-
 
 // Processed received message (i.e. no SOH, EOF)
 char msg_buf[RX_BUF_SIZE];    
@@ -74,37 +71,11 @@ static void sleep_handler(void)
     __WFE();
 }
 
-NRF_SERIAL_DRV_UART_CONFIG_DEF(m_uarte0_drv_config,
-                      RX_PIN_NUMBER, TX_PIN_NUMBER,
-                      RTS_PIN_NUMBER, CTS_PIN_NUMBER,
-                      NRF_UART_HWFC_DISABLED, NRF_UART_PARITY_EXCLUDED,
-                      NRF_UART_BAUDRATE_9600,
-                      UART_DEFAULT_CONFIG_IRQ_PRIORITY);
-
-#define SERIAL_FIFO_TX_SIZE TX_BUF_SIZE
-#define SERIAL_FIFO_RX_SIZE RX_BUF_SIZE
-NRF_SERIAL_QUEUES_DEF(serial_queues, SERIAL_FIFO_TX_SIZE, SERIAL_FIFO_RX_SIZE);
 
 #define SERIAL_BUF_TX_SIZE 1           // The number of chars the uart can process before interrupt
 #define SERIAL_BUF_RX_SIZE 1
-NRF_SERIAL_BUFFERS_DEF(serial_bufs, SERIAL_BUF_TX_SIZE, SERIAL_BUF_RX_SIZE);
-
-NRF_SERIAL_CONFIG_DEF(serial_config, NRF_SERIAL_MODE_DMA,
-                      &serial_queues, &serial_bufs, 
-                      comms_evt_handler, sleep_handler);
-
-NRF_SERIAL_UART_DEF(serial_uarte, 0);
-
-uint32_t baud_list[NUM_BAUD_RATES] = BAUD_LIST;
 
 
-ret_code_t ConsoleCommsPortCheck(NULL)
-{
-
-
-
-
-}
 
 ret_code_t ConsoleSerialPortInit(struct nrf_serial_s const * p_serial)
 {   ret_code_t ret = NRFX_SUCCESS;

@@ -3,8 +3,7 @@
 
 
 #include "app_error.h"
-#include "df_nrf_serial.h"
-#include "nrfx_uarte.h"
+#include "nrf_libuarte_async.h"
 
 
 #define NUM_BAUD_RATES 5
