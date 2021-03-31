@@ -42,14 +42,15 @@ static void led_timer_handle(void * p_context);
 // *** global function prototypes in header file ***
 
 // Colour data structures for the multi-colour LED
-const uint8_t PROC_LED_RED[]     = {255,0,0};       // Red used for Error status
-const uint8_t PROC_LED_GREEN[]   = {0,255,0};       // Green used for OK status    
-const uint8_t PROC_LED_ORANGE[]  = {255,128,0};     // Orange used for "Transaction" indication
-const uint8_t PROC_LED_YELLOW[]  = {255,255,0};     // Yellow used for pushbutton timing indication
-const uint8_t PROC_LED_CYAN[]    = {0,255,255};     // Cyan used for "Comms" indication
-const uint8_t PROC_LED_BLUE[]    = {0,0,255};       
-const uint8_t PROC_LED_MAGENTA[] = {255,0,255};     // Magenta used for "Memory" indication
-const uint8_t PROC_LED_WHITE[]   = {128,128,128};   // White
+#define bright_scale 50        // Brightscale MAX=128 but scale down to reduce brightness
+const uint8_t PROC_LED_RED[]     = {((2*bright_scale)-1),0,0};       // Red used for Error status
+const uint8_t PROC_LED_GREEN[]   = {0,((2*bright_scale)-1),0};       // Green used for OK status    
+const uint8_t PROC_LED_ORANGE[]  = {((2*bright_scale)-1),(bright_scale-1),0};     // Orange used for "Transaction" indication
+const uint8_t PROC_LED_YELLOW[]  = {((2*bright_scale)-1),((2*bright_scale)-1),0};     // Yellow used for pushbutton timing indication
+const uint8_t PROC_LED_CYAN[]    = {0,((2*bright_scale)-1),((2*bright_scale)-1)};     // Cyan used for "Comms" indication
+const uint8_t PROC_LED_BLUE[]    = {0,0,((2*bright_scale)-1)};       
+const uint8_t PROC_LED_MAGENTA[] = {((2*bright_scale)-1),0,((2*bright_scale)-1)};     // Magenta used for "Memory" indication
+const uint8_t PROC_LED_WHITE[]   = {(bright_scale-1),(bright_scale-1),(bright_scale-1)};   // White
 
 
 // *** Global Functions ***

@@ -105,7 +105,7 @@ int main(void)
     //APP_ERROR_CHECK(ret);
 
     APP_ERROR_CHECK(df_hardware_init());               // Set up the hardware specific to the Distributed Device
-    APP_ERROR_CHECK(ConsoleSerialPortInit(NULL));
+    APP_ERROR_CHECK(ConsoleSerialPortInit());
     APP_ERROR_CHECK(application_init());
 
     start_nv_storage();
@@ -117,7 +117,7 @@ int main(void)
 
     NRF_LOG_INFO("DF_DistDev - Main Loop Starting");
 
-    ConsoleWrite(NULL, "Hello DDPC", 10);
+    //ConsoleWrite(&intbus, "Hello DDPC", 10);
 
     while (true)
     {

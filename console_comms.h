@@ -107,8 +107,8 @@ typedef struct
 extern comms_context_t comms_context;
 
 #define COMMS_CONTEXT_DEFAULT                   \
-{   .rx_buf = &rx_buf,                          \
-    .tx_buf = &tx_buf,                          \
+{   .rx_buf = rx_buf,                          \
+    .tx_buf = tx_buf,                          \
 }
 
 #define COMMS_TH_ERR        6
@@ -164,7 +164,8 @@ typedef struct
  * @return              Standard error code.
  * */
 //ret_code_t ConsoleSerialPortInit(struct nrf_serial_s const * p_serial);
-ret_code_t ConsoleSerialPortInit(const nrf_libuarte_drv_t *const p_serial);
+//ret_code_t ConsoleSerialPortInit(const nrf_libuarte_drv_t * const p_libuarte);
+ret_code_t ConsoleSerialPortInit(void);
 
 /**
  * @brief Function to send data out of the serial port
@@ -174,7 +175,7 @@ ret_code_t ConsoleSerialPortInit(const nrf_libuarte_drv_t *const p_serial);
  * @param count         number of characters to send
  * @return          Standard error code.
  * */
-size_t ConsoleWrite(struct nrf_serial_s const * p_serial, char *buf, uint8_t count);
+size_t ConsoleWrite(const nrf_libuarte_drv_t * const p_libuarte, char *buf, uint8_t count);
 
 
 /**

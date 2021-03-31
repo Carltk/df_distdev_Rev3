@@ -48,7 +48,8 @@ uint8_t tx_char_count;
 
 comms_context_t comms_context = COMMS_CONTEXT_DEFAULT;
 
-NRF_LIBUARTE_DRV_DEFINE(intbus, 0, DF_COMMS_TIMER_INST);
+NRF_LIBUARTE_DRV_DEFINE(intbus, DF_PORT_INTBUS, DF_COMMS_TIMER_INST);
+
 
 //NRF_QUEUE_DEF(buffer_t, m_buf_queue, 10, NRF_QUEUE_MODE_NO_OVERFLOW);
 
@@ -58,7 +59,7 @@ NRF_LIBUARTE_DRV_DEFINE(intbus, 0, DF_COMMS_TIMER_INST);
 //void init_msg_struct(void);
 
 void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt);
-ret_code_t swap_baud(nrf_libuarte_drv_t *const p_serial);
+ret_code_t swap_baud(const nrf_libuarte_drv_t * const p_libuarte);
 
 rx_state_t get_comm_state(con_comms_t *rd);
 void con_comms_handler(con_comms_t *rd, char c);
@@ -69,7 +70,7 @@ void interpret_msg(msg_data_t *md);
 uint8_t handle_action_cmd(msg_data_t *md, char *buf);
 uint8_t send_attr_bytes(msg_data_t *md, char *buf, char bytes_reqd);
 
-//void clear_rx_bufs(struct nrf_serial_s const * p_serial);
+void clear_rx_bufs(void);
 
 // size_t ConsoleWrite(char *buf, uint8_t count);
 
@@ -84,20 +85,10 @@ static void sleep_handler(void)
 #define SERIAL_BUF_TX_SIZE 1           // The number of chars the uart can process before interrupt
 #define SERIAL_BUF_RX_SIZE 1
 
-ret_code_t ConsoleSerialPortInit(nrf_libuarte_drv_t * p_serial)
+ret_code_t ConsoleSerialPortInit(void)
 {   ret_code_t ret = NRFX_SUCCESS;
 
     con_comms.comms_state = COMMS_INIT;
-
-    if (p_serial == NULL)
-    {   nrf_gpio_cfg_output(TX_ENABLE);               // Configure the TxEnable output
-        p_serial = &intbus;
-    }
-    else
-    {   ret =  nrf_libuarte_drv_uninit(p_serial);   
-        if (ret != NRFX_SUCCESS)
-        {    NRFX_LOG_INFO("Serial uninit failure [%x]", ret);  }
-    }
 
     nrf_gpio_pin_clear(TX_ENABLE);    
 
@@ -117,7 +108,7 @@ ret_code_t ConsoleSerialPortInit(nrf_libuarte_drv_t * p_serial)
         //.rxdone_tsk,    ///< Task to be triggered when ENDRX UARTE event occurs.
     };
 
-    ret = nrf_libuarte_drv_init(p_serial, &nrf_libuarte_drv_config, &comms_evt_handler, &comms_context);
+    ret = nrf_libuarte_drv_init(&intbus, &nrf_libuarte_drv_config, &comms_evt_handler, &comms_context);
     
     if (ret != NRFX_SUCCESS)
     {    NRFX_LOG_INFO("Serial init failure [%x]", ret);  }
@@ -148,7 +139,7 @@ NRF_LOG_INFO("Comms: Data Received");
                 if ((con_comms.rx_char_count == 0) && (c != SOH_CHAR))
                 {   if (inc_is_error(&con_comms.err_count, COMMS_TH_NOT_SOH))
                     {   // NRF_LOG_INFO("Too many Serial errors [%d]", COMMS_TH_NOT_SOH);            
-                        swap_baud(p_serial);    }
+                        swap_baud(&intbus);    }
                     break;
                 }
             
@@ -165,18 +156,18 @@ NRF_LOG_INFO("Comms: Data Received");
                 }
             }
             else
-            {   clear_rx_bufs(p_serial);    }
+            {   clear_rx_bufs();    }
 
             break;        
         case NRF_LIBUARTE_DRV_EVT_RX_BUF_REQ: ///< Requesting new buffer for receiving data.
 NRF_LOG_INFO("Comms: Rx buf request");                        
-            clear_rx_bufs(p_serial);
+            clear_rx_bufs();
             break;
         case NRF_LIBUARTE_DRV_EVT_TX_DONE:     ///< Requested TX transfer completed.
 NRF_LOG_INFO("Comms: Tx done event");                                    
             nrf_gpio_pin_clear(TX_ENABLE);           // turn off the TxEnable pin
-            clear_rx_bufs(p_serial);
-            ret = nrf_libuarte_drv_rx_start(p_serial, context->rx_buf, RX_BUF_SIZE, false);     // re-enable the receiver
+            clear_rx_bufs();
+            ret = nrf_libuarte_drv_rx_start(&intbus, rx_buf, RX_BUF_SIZE, false);     // re-enable the receiver
 
             if (ddpc.nv_immediate.dev_address == DISCOVERY_DFLT_ADDR)                           // At the moment only check for collisions in adoption
             {   if (memcmp(&tx_buf, con_comms.rx_buf, tx_char_count - 1) != 0)                  // Check for data collisions
@@ -190,12 +181,10 @@ NRF_LOG_INFO("Comms: Error");
         case NRF_LIBUARTE_DRV_EVT_OVERRUN_ERROR:    ///< Error reported by the driver.
 NRF_LOG_INFO("  - Overrun Error");                        
             con_comms.comms_state = COMMS_ERROR;
-            clear_rx_bufs(p_serial);
+            clear_rx_bufs();
 
             if (inc_is_error(&con_comms.err_count, COMMS_TH_ERR))
-            {   swap_baud(p_serial);                }
-            else
-            {   ConsoleSerialPortInit(p_serial);    }          // re-init the serial port & structures
+            {   swap_baud(&intbus);                }
 
             break;
         default:
@@ -306,7 +295,7 @@ msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
             }
         }
 
-        clear_rx_bufs(&serial_uarte);
+        clear_rx_bufs();
         rd->rx_state = RX_IS_IDLE;         // Clear the rx state flag so we can get new messages
     }
 
@@ -576,9 +565,8 @@ uint8_t MakeSimpleCRC(uint8_t Byte, uint8_t History)
 }
 
 
-void clear_rx_bufs()
+void clear_rx_bufs(void)
 {
-
     //nrf_serial_rx_drain(p_serial);             // clear out received chars
     //nrf_queue_reset(&serial_queues_rxq);
     con_comms.rx_buf[0] = 0;                              // Wipe the SOH character from the buffer
@@ -598,18 +586,14 @@ uint8_t IsStuffable(char theChar)
 }
 
 
-size_t ConsoleWrite(const nrf_libuarte_drv_t * const p_serial, char *buf, uint8_t count)
+size_t ConsoleWrite(const nrf_libuarte_drv_t * const p_libuarte, char *buf, uint8_t count)
 {   size_t sent = 0;
     tx_char_count = 0;
     struct nrf_serial_s const * tp_serial;
 
-    if (p_serial == NULL)
-    {   p_serial = &intbus;  }
-    else
-    {   p_serial = p_serial; }
 
     if (ddpc.nv_immediate.dev_address != DISCOVERY_DFLT_ADDR)           // At the moment only check for collisions in adoption
-    {   nrf_libuarte_drv_rx_stop(p_serial);   }                         // disable the comms receiver when we're not in adoption mode
+    {   nrf_libuarte_drv_rx_stop(p_libuarte);   }                         // disable the comms receiver when we're not in adoption mode
 
     clear_rx_bufs();
     
@@ -629,12 +613,12 @@ size_t ConsoleWrite(const nrf_libuarte_drv_t * const p_serial, char *buf, uint8_
 
     nrf_gpio_pin_set(TX_ENABLE);          // Activate  TxEnable pin
 
-    nrf_libuarte_drv_tx(p_serial, buf, count);
+    nrf_libuarte_drv_tx(p_libuarte, buf, count);
 
     return(sent);
 }
 
-ret_code_t swap_baud(struct nrf_serial_s const * p_serial)
+ret_code_t swap_baud(const nrf_libuarte_drv_t * const p_libuarte)
 {   ret_code_t ret; 
 
     // TODO - reimplement baud swapping
@@ -643,17 +627,16 @@ ret_code_t swap_baud(struct nrf_serial_s const * p_serial)
     
     con_comms.comms_state = COMMS_AUTOBAUD;
 
-    ret = nrf_serial_uninit(p_serial);   
-    if (ret != NRFX_SUCCESS)
-    {    NRFX_LOG_INFO("Serial uninit failure [%x]", ret);  }
+    nrf_libuarte_drv_uninit(p_libuarte);
 
     nrf_gpio_pin_clear(TX_ENABLE);    
 
-    ret = nrf_serial_init(p_serial, &m_uarte0_drv_config, &serial_config);
+    //ret = nrf_libuarte_drv_init(p_libuarte, p_config, evt_handler, context);
     if (ret != NRFX_SUCCESS)
     {    NRFX_LOG_INFO("Serial 1st init failure [%x]", ret);  }
 
-    nrf_uart_baudrate_set(p_serial->instance.p_reg, baud_list[con_comms.baud_index]);   
+    nrf_uarte_baudrate_set(p_libuarte->uarte, baud_list[con_comms.baud_index]);
+
 
     return(ret);
 }

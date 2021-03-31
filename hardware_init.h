@@ -92,6 +92,9 @@ extern nrfx_timer_t pulse_counter;
 #define DF_ANALOG_TIMER_INST    2               // Timer Device Instance for the SAADC (analog)
 #define DF_COMMS_TIMER_INST     3               // Timer Device Instance for the Comms received-character counter
 
+#define DF_PORT_INTBUS  0                       // Console Comms port
+#define DF_PORT_EXTBUS  1                       // 2nd port for Personality Module
+
 #define NUM_NOZZLES     1
 #define NUM_PBS         2                       // Mode and MagSense are different but they may do the same thing
 #define MODE_PB_IDX     0
