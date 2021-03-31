@@ -84,7 +84,6 @@
       <file file_name="../../../components/libraries/fstorage/nrf_fstorage_nvmc.c" />
       <file file_name="../../../components/libraries/bootloader/dfu/nrf_dfu_trigger_usb.c" />
       <file file_name="../../../components/libraries/usbd/app_usbd.c" />
-      <file file_name="../../../components/libraries/libuarte/nrf_libuarte_async.c" />
       <file file_name="../../../components/libraries/libuarte/nrf_libuarte_drv.c" />
     </folder>
     <folder Name="nRF_Drivers">

@@ -87,11 +87,10 @@ extern nrfx_timer_t pulse_counter;
 //#define RX2_PIN_NUMBER  NRF_GPIO_PIN_MAP(0,13)  
 // #define TX2_PIN_NUMBER  NRF_GPIO_PIN_MAP(0,15)
 
-#define HWFC           true                    // hardware flow control
-
 #define DF_SOFTDEV_TIMER_INST   0               // Reserved Timer Instance for the SoftDevice
 #define DF_PULSER_TIMER_INST    1               // Timer Device Instance for the Pulse Counter
 #define DF_ANALOG_TIMER_INST    2               // Timer Device Instance for the SAADC (analog)
+#define DF_COMMS_TIMER_INST     3               // Timer Device Instance for the Comms received-character counter
 
 #define NUM_NOZZLES     1
 #define NUM_PBS         2                       // Mode and MagSense are different but they may do the same thing

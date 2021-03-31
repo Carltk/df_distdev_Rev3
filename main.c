@@ -64,8 +64,6 @@
 #include "nrf_gpio.h"
 #include "nrf_delay.h"
 
-#include "df_nrf_serial.h"
-
 #include "app_timer.h"
 #include "app_error.h"
 #include "app_util.h"

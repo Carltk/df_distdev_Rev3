@@ -688,7 +688,7 @@
  
 
 #ifndef NRFX_TIMER3_ENABLED
-#define NRFX_TIMER3_ENABLED 0
+#define NRFX_TIMER3_ENABLED 1
 #endif
 // <q> NRFX_TIMER4_ENABLED  - Enable TIMER4 instance
  
@@ -1584,12 +1584,6 @@
 
 // </e>
 // </e>
-
-// <q> NRF_LIBUARTE_ASYNC_WITH_APP_TIMER  - nrf_libuarte_async - libUARTE_async library
- 
-#ifndef NRF_LIBUARTE_ASYNC_WITH_APP_TIMER
-#define NRF_LIBUARTE_ASYNC_WITH_APP_TIMER 1
-#endif
 
 // <q> NRF_MEMOBJ_ENABLED  - nrf_memobj - Linked memory allocator module
  
