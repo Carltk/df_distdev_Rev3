@@ -51,9 +51,6 @@ comms_context_t comms_context = COMMS_CONTEXT_DEFAULT;
 NRF_LIBUARTE_DRV_DEFINE(intbus, DF_PORT_INTBUS, DF_COMMS_TIMER_INST);
 
 
-//NRF_QUEUE_DEF(buffer_t, m_buf_queue, 10, NRF_QUEUE_MODE_NO_OVERFLOW);
-
-
 // *** function prototypes ***
 //void init_rx_struct(void);
 //void init_msg_struct(void);
@@ -81,22 +78,19 @@ static void sleep_handler(void)
     __WFE();
 }
 
-
-#define SERIAL_BUF_TX_SIZE 1           // The number of chars the uart can process before interrupt
-#define SERIAL_BUF_RX_SIZE 1
-
 ret_code_t ConsoleSerialPortInit(void)
 {   ret_code_t ret = NRFX_SUCCESS;
 
     con_comms.comms_state = COMMS_INIT;
 
+    nrf_gpio_cfg_output(TX_ENABLE);
     nrf_gpio_pin_clear(TX_ENABLE);    
 
     nrf_libuarte_drv_config_t nrf_libuarte_drv_config = {
         .tx_pin     = TX_PIN_NUMBER,
         .rx_pin     = RX_PIN_NUMBER,
-        .rts_pin = RTS_PIN_NUMBER,      
-        .cts_pin = CTS_PIN_NUMBER,      
+        //.rts_pin = RTS_PIN_NUMBER,      
+        //.cts_pin = CTS_PIN_NUMBER,      
         .hwfc = NRF_UARTE_HWFC_DISABLED,          ///< Flow control configuration.
         .parity = NRF_UARTE_PARITY_EXCLUDED,        ///< Parity configuration.
         .baudrate = NRF_UARTE_BAUDRATE_19200,   ///< Baud rate.
@@ -109,7 +103,7 @@ ret_code_t ConsoleSerialPortInit(void)
     };
 
     ret = nrf_libuarte_drv_init(&intbus, &nrf_libuarte_drv_config, &comms_evt_handler, &comms_context);
-    
+
     if (ret != NRFX_SUCCESS)
     {    NRFX_LOG_INFO("Serial init failure [%x]", ret);  }
 
@@ -130,7 +124,7 @@ void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
     switch (p_evt->type)
     {
         case NRF_LIBUARTE_DRV_EVT_RX_DATA:    ///< Data received.
-NRF_LOG_INFO("Comms: Data Received");                                    
+            NRF_LOG_INFO("Comms: Data Received");                                    
 
             //ret = nrf_serial_read(p_serial, &c, sizeof(c), &chars_read, NRF_SERIAL_MAX_TIMEOUT);
             //ret = nrf_serial_read(p_serial, &c, sizeof(c), &chars_read, 0);
@@ -160,14 +154,15 @@ NRF_LOG_INFO("Comms: Data Received");
 
             break;        
         case NRF_LIBUARTE_DRV_EVT_RX_BUF_REQ: ///< Requesting new buffer for receiving data.
-NRF_LOG_INFO("Comms: Rx buf request");                        
+            NRF_LOG_INFO("Comms: Rx buf request");                        
             clear_rx_bufs();
+            nrf_libuarte_drv_rx_buf_rsp(&intbus, rx_buf, RX_BUF_SIZE);
             break;
         case NRF_LIBUARTE_DRV_EVT_TX_DONE:     ///< Requested TX transfer completed.
-NRF_LOG_INFO("Comms: Tx done event");                                    
+            NRF_LOG_INFO("Comms: Tx done event");                                    
             nrf_gpio_pin_clear(TX_ENABLE);           // turn off the TxEnable pin
             clear_rx_bufs();
-            ret = nrf_libuarte_drv_rx_start(&intbus, rx_buf, RX_BUF_SIZE, false);     // re-enable the receiver
+            ret = nrf_libuarte_drv_rx_start(&intbus, rx_buf, RX_BUF_SIZE, false);               // (re)enable the receiver
 
             if (ddpc.nv_immediate.dev_address == DISCOVERY_DFLT_ADDR)                           // At the moment only check for collisions in adoption
             {   if (memcmp(&tx_buf, con_comms.rx_buf, tx_char_count - 1) != 0)                  // Check for data collisions
@@ -418,7 +413,7 @@ void interpret_msg(msg_data_t *md)
     {   
         c = make_lrc(buf, char_cnt);
         buf[char_cnt++] = c;
-        char_cnt = ConsoleWrite(NULL, buf, char_cnt);  
+        char_cnt = ConsoleWrite(buf, char_cnt);  
         
         if (buf[MSGBUF_COMMAND] != 0x02)
         {   NRFX_LOG_INFO("Tx [%d] chars, Cmd [%x]", char_cnt, buf[MSGBUF_COMMAND]);    }
@@ -568,7 +563,6 @@ uint8_t MakeSimpleCRC(uint8_t Byte, uint8_t History)
 void clear_rx_bufs(void)
 {
     //nrf_serial_rx_drain(p_serial);             // clear out received chars
-    //nrf_queue_reset(&serial_queues_rxq);
     con_comms.rx_buf[0] = 0;                              // Wipe the SOH character from the buffer
     con_comms.rx_buf[(con_comms.rx_char_count - 1)] = 0;    // Wipe the EOF character from the buffer    
     con_comms.rx_char_count = 0;
@@ -586,14 +580,17 @@ uint8_t IsStuffable(char theChar)
 }
 
 
-size_t ConsoleWrite(const nrf_libuarte_drv_t * const p_libuarte, char *buf, uint8_t count)
-{   size_t sent = 0;
+size_t ConsoleWrite(char *buf, uint8_t count)
+{   
+    ret_code_t ret = NRFX_SUCCESS; 
+    size_t sent = 0;
     tx_char_count = 0;
     struct nrf_serial_s const * tp_serial;
 
-
-    if (ddpc.nv_immediate.dev_address != DISCOVERY_DFLT_ADDR)           // At the moment only check for collisions in adoption
-    {   nrf_libuarte_drv_rx_stop(p_libuarte);   }                         // disable the comms receiver when we're not in adoption mode
+    //TODO - Do i need to allow rx during tx when in dicovery mode (in case multiple devices answer at once)
+    ///if (ddpc.nv_immediate.dev_address != DISCOVERY_DFLT_ADDR)           // At the moment only check for collisions in adoption
+    //{      }                         // disable the comms receiver when we're not in adoption mode
+    nrf_libuarte_drv_rx_stop(&intbus);
 
     clear_rx_bufs();
     
@@ -613,8 +610,9 @@ size_t ConsoleWrite(const nrf_libuarte_drv_t * const p_libuarte, char *buf, uint
 
     nrf_gpio_pin_set(TX_ENABLE);          // Activate  TxEnable pin
 
-    nrf_libuarte_drv_tx(p_libuarte, buf, count);
-
+    ret = nrf_libuarte_drv_tx(&intbus, tx_buf, tx_char_count);
+        
+    if (ret == NRFX_SUCCESS) sent = tx_char_count;
     return(sent);
 }
 

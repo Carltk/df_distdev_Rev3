@@ -117,7 +117,7 @@ int main(void)
 
     NRF_LOG_INFO("DF_DistDev - Main Loop Starting");
 
-    //ConsoleWrite(&intbus, "Hello DDPC", 10);
+    ConsoleWrite("Hello DDPC", 10);
 
     while (true)
     {

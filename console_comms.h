@@ -170,12 +170,11 @@ ret_code_t ConsoleSerialPortInit(void);
 /**
  * @brief Function to send data out of the serial port
  *
- * @param * p_serial    pointer to a Serial port instance variable
  * @param * buf         pointer to a character buffer holding the data to send
  * @param count         number of characters to send
  * @return          Standard error code.
  * */
-size_t ConsoleWrite(const nrf_libuarte_drv_t * const p_libuarte, char *buf, uint8_t count);
+size_t ConsoleWrite(char *buf, uint8_t count);
 
 
 /**
