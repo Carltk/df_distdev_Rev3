@@ -35,11 +35,12 @@ static uint16_t DevAddress = DISCOVERY_DFLT_ADDR;
 uint32_t baud_list[NUM_BAUD_RATES] = BAUD_LIST;
 
 // Message received from comms
+char inbuf[INBUF_SIZE];
 char rx_buf[RX_BUF_SIZE];    
 con_comms_t con_comms = RX_DATA_DEFAULT;
 
 // Processed received message (i.e. no SOH, EOF)
-char msg_buf[RX_BUF_SIZE];    
+char msg_buf[MSG_BUF_SIZE];    
 static msg_data_t msg_data = MSG_DATA_DEFAULT;
 
 // Message sent  out
@@ -50,15 +51,14 @@ comms_context_t comms_context = COMMS_CONTEXT_DEFAULT;
 
 NRF_LIBUARTE_DRV_DEFINE(intbus, DF_PORT_INTBUS, DF_COMMS_TIMER_INST);
 
-
 // *** function prototypes ***
 //void init_rx_struct(void);
 //void init_msg_struct(void);
 
+ret_code_t PortInit(nrf_uarte_baudrate_t baud);
 void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt);
 ret_code_t swap_baud(const nrf_libuarte_drv_t * const p_libuarte);
 
-rx_state_t get_comm_state(con_comms_t *rd);
 void con_comms_handler(con_comms_t *rd, char c);
 msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd);
 bool is_checksum_ok(con_comms_t *rd);
@@ -86,6 +86,18 @@ ret_code_t ConsoleSerialPortInit(void)
     nrf_gpio_cfg_output(TX_ENABLE);
     nrf_gpio_pin_clear(TX_ENABLE);    
 
+    con_comms.baud_index = 2;       // TODO - this value set to 19200 to test baud cycling .. default should be Console Default = 9600 (index 1)
+    ret = PortInit(baud_list[con_comms.baud_index]);
+
+    NRFX_LOG_INFO("Serial (IntBus) Port - Initialised"); 
+
+    con_comms.comms_state = COMMS_DISCONNECTED;
+    return(ret);
+}
+
+ret_code_t PortInit(nrf_uarte_baudrate_t baud)
+{   ret_code_t ret = NRFX_SUCCESS;
+    
     nrf_libuarte_drv_config_t nrf_libuarte_drv_config = {
         .tx_pin     = TX_PIN_NUMBER,
         .rx_pin     = RX_PIN_NUMBER,
@@ -93,7 +105,7 @@ ret_code_t ConsoleSerialPortInit(void)
         //.cts_pin = CTS_PIN_NUMBER,      
         .hwfc = NRF_UARTE_HWFC_DISABLED,          ///< Flow control configuration.
         .parity = NRF_UARTE_PARITY_EXCLUDED,        ///< Parity configuration.
-        .baudrate = NRF_UARTE_BAUDRATE_19200,   ///< Baud rate.
+        .baudrate = baud,   ///< Baud rate.
         .irq_priority = APP_IRQ_PRIORITY_LOW,  ///< Interrupt priority.
         .pullup_rx = 1,     ///< Pull up on RX pin.
         //.startrx_evt,   ///< Event to trigger STARTRX task in UARTE.
@@ -103,15 +115,30 @@ ret_code_t ConsoleSerialPortInit(void)
     };
 
     ret = nrf_libuarte_drv_init(&intbus, &nrf_libuarte_drv_config, &comms_evt_handler, &comms_context);
-
     if (ret != NRFX_SUCCESS)
     {    NRFX_LOG_INFO("Serial init failure [%x]", ret);  }
-
-    NRFX_LOG_INFO("Serial (IntBus) Port - Initialised at baud [%d]", nrf_libuarte_drv_config.baudrate); 
-
-    con_comms.comms_state = COMMS_DISCONNECTED;
-
+    
+    ret = nrf_libuarte_drv_rx_start(&intbus, inbuf, INBUF_SIZE, false);               // (re)enable the receiver    
+    if (ret != NRFX_SUCCESS)
+    {    NRFX_LOG_INFO("Serial start failure [%x]", ret);  }
+    
     return(ret);
+}
+
+void comms_timer_tick(uint8_t timer_val)
+{   // called by the application timer 
+    
+    switch(timer_val)
+    {
+        case APP_STATE_100MS:
+            break;
+        case APP_STATE_1S:
+            break;
+        case APP_STATE_10S:
+            break;
+        default:
+            break;
+    }
 }
 
 void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
@@ -124,45 +151,54 @@ void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
     switch (p_evt->type)
     {
         case NRF_LIBUARTE_DRV_EVT_RX_DATA:    ///< Data received.
-            NRF_LOG_INFO("Comms: Data Received");                                    
 
-            //ret = nrf_serial_read(p_serial, &c, sizeof(c), &chars_read, NRF_SERIAL_MAX_TIMEOUT);
-            //ret = nrf_serial_read(p_serial, &c, sizeof(c), &chars_read, 0);
-            if (ret == NRFX_SUCCESS)
-            {   
+                c = *p_evt->data.rxtx.p_data;
+                con_comms.in_char_count += 1;
+
+                //if (c == SOH_CHAR)
+                //{   NRF_LOG_INFO("SOH Rx'd. Cnt[%d]", con_comms.in_char_count);    }
+                
                 if ((con_comms.rx_char_count == 0) && (c != SOH_CHAR))
-                {   if (inc_is_error(&con_comms.err_count, COMMS_TH_NOT_SOH))
-                    {   // NRF_LOG_INFO("Too many Serial errors [%d]", COMMS_TH_NOT_SOH);            
-                        swap_baud(&intbus);    }
-                    break;
-                }
-            
-                if (nrf_gpio_pin_read(TX_ENABLE) == 0)      // Only receive data when I'm not transmitting
-                {   con_comms_handler(&con_comms, c);  }
+                {   break;   }
 
-                if (get_comm_state(&con_comms) == RX_GOT_EOF)
+                if (nrf_gpio_pin_read(TX_ENABLE) == 0)      // Only receive data when I'm not transmitting
                 {   
-                    if (con_comms.comms_state < COMMS_VISIBLE) 
+                    con_comms_handler(&con_comms, c);  
+
+                    if (con_comms.comms_state < COMMS_VISIBLE)
+                    {   con_comms.comms_state = COMMS_VISIBLE; }
+                }
+                else
+                {  
+                    NRF_LOG_INFO("Rx data while Tx. got %x", c);                 
+                }
+
+                //NRF_LOG_INFO("Rx data. got %x, state %x, charCnt %d", c, con_comms.rx_state, con_comms.rx_char_count);
+
+                if (con_comms.rx_state == RX_GOT_EOF)
+                {   if (con_comms.comms_state < COMMS_VISIBLE) 
                     {   con_comms.comms_state = COMMS_VISIBLE;  }
                 
                     con_comms.err_count = 0;
                     get_msg_data(&msg_data, &con_comms);
                 }
-            }
-            else
-            {   clear_rx_bufs();    }
+
+                if (con_comms.in_char_count >= RX_BUF_SIZE)
+                {   
+                    
+                    NRF_LOG_INFO("Comms: too many chars");                        
+                    clear_rx_bufs();
+
+                    if (inc_is_error(&con_comms.err_count, COMMS_TH_ERR))
+                    {   swap_baud(&intbus);                }
+                }
 
             break;        
         case NRF_LIBUARTE_DRV_EVT_RX_BUF_REQ: ///< Requesting new buffer for receiving data.
-            NRF_LOG_INFO("Comms: Rx buf request");                        
-            clear_rx_bufs();
-            nrf_libuarte_drv_rx_buf_rsp(&intbus, rx_buf, RX_BUF_SIZE);
+            nrf_libuarte_drv_rx_buf_rsp(&intbus, inbuf, INBUF_SIZE);   
             break;
         case NRF_LIBUARTE_DRV_EVT_TX_DONE:     ///< Requested TX transfer completed.
-            NRF_LOG_INFO("Comms: Tx done event");                                    
-            nrf_gpio_pin_clear(TX_ENABLE);           // turn off the TxEnable pin
-            clear_rx_bufs();
-            ret = nrf_libuarte_drv_rx_start(&intbus, rx_buf, RX_BUF_SIZE, false);               // (re)enable the receiver
+            //NRF_LOG_INFO("Comms: Tx done event");                                    
 
             if (ddpc.nv_immediate.dev_address == DISCOVERY_DFLT_ADDR)                           // At the moment only check for collisions in adoption
             {   if (memcmp(&tx_buf, con_comms.rx_buf, tx_char_count - 1) != 0)                  // Check for data collisions
@@ -170,26 +206,32 @@ void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
                 else
                 {   ddpc.nv_immediate.dev_address = con_comms.discovery_temp_addr;     }        // No collision .. set the address to the temporary Adoption address
             }
+
+            clear_rx_bufs();
+            nrf_gpio_pin_clear(TX_ENABLE);           // turn off the TxEnable pin
+
             break;
         case NRF_LIBUARTE_DRV_EVT_ERROR:      ///< Error reported by the UARTE peripheral.
 NRF_LOG_INFO("Comms: Error");                        
         case NRF_LIBUARTE_DRV_EVT_OVERRUN_ERROR:    ///< Error reported by the driver.
 NRF_LOG_INFO("  - Overrun Error");                        
+            
             con_comms.comms_state = COMMS_ERROR;
+            
             clear_rx_bufs();
 
             if (inc_is_error(&con_comms.err_count, COMMS_TH_ERR))
-            {   swap_baud(&intbus);                }
+            {   con_comms.err_count = 0;
+                swap_baud(&intbus);              
+            }
 
             break;
         default:
 NRF_LOG_INFO("Comms: Unknown event [%x]", p_evt->type);                                               
+            clear_rx_bufs();
             break;
     }
 }
-
-rx_state_t get_comm_state(con_comms_t *rd)
-{   return(rd->rx_state);   }
 
 void con_comms_handler(con_comms_t *rd, char c)
 {   char d = c;
@@ -238,8 +280,8 @@ msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
 
                 if (md->msg_addr == DISCOVERY_DFLT_ADDR)                        // If it's the Adoption address
                 {   
-                    if (con_comms.comms_state < COMMS_ADOPTING)
-                    {    con_comms.comms_state = COMMS_ADOPTING;    }
+                    if (rd->comms_state < COMMS_ADOPTING)
+                    {    rd->comms_state = COMMS_ADOPTING;    }
 
                     if (ddpc.nv_immediate.dev_address & 0xFF00)                 // and only if we haven't got a real (adopted) address
                     {   NRF_LOG_INFO("Comms Discovery, Holdoff [%d]", rd->discovery_holdoff);                                  
@@ -275,18 +317,21 @@ msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
     if (retval > MSG_INCOMPLETE)
     {
         if (retval == MSG_COMPLETE)
-        {   
+        {   //NRF_LOG_DEBUG("Comms - got packet");      
+            //NRF_LOG_HEXDUMP_INFO(rd->rx_buf, rd->rx_char_count);	            
+            
             if (is_checksum_ok(rd) == true)                                     // check the msg checksum
-            {   memcpy(md->msg_buf, &rd->rx_buf[1], (rd->rx_char_count - 2));   // All good .. copy the message into the msg_buf
+            {   
+                memcpy(md->msg_buf, &rd->rx_buf[1], (rd->rx_char_count - 2));   // All good .. copy the message into the msg_buf
                 md->msg_char_count =  rd->rx_char_count - 2;   
                 md->msg_state = retval = MSG_OK;                                // and set the return value
-                // NRF_LOG_DEBUG("Message for me - [%x:%x]. Data [%x]", md->msg_type, md->msg_addr, *md->msg_buf);      
+                //NRF_LOG_DEBUG("Message for me - [%x:%x]. Datalen [%x]", md->msg_type, md->msg_addr, rd->rx_char_count); 
+                
                 interpret_msg(md);
             }
             else
             {   md->msg_state = retval = MSG_BAD_CS;                           // bad message, output error message
                 NRF_LOG_DEBUG("Comms Msg bad CS");      
-
             }
         }
 
@@ -309,8 +354,6 @@ void interpret_msg(msg_data_t *md)
 
     char_cnt = MSG_PREAMBLE;              // reflect the first 4 chars from the incomming message back to the output
     memcpy(buf, md->msg_buf, char_cnt);   // preload the output buffer with type.1, addr.2, cmd.1
-
-    // NRF_LOG_DEBUG("Rx %d. Cmd %x", char_cnt, md->msg_buf[MSGBUF_COMMAND]);      
 
     switch (md->msg_buf[MSGBUF_COMMAND])
     {
@@ -380,22 +423,25 @@ void interpret_msg(msg_data_t *md)
             send_resp = true;
             break;
         case FD_CMD_IDENT:
-            if (buf[MSGBUF_PAYLOAD] & IDENT_LED)
-            {   
-                wipeAllLEDSlots();
+            if (md->msg_buf[MSGBUF_PAYLOAD] & IDENT_LED)
+            {   wipeAllLEDSlots();
                 a = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_MED, 8, 32, 0xFF);
                 c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_MED, 8, 32, a);
                 c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_MED, 8, 32, c);
                 loopLEDPattern(a, c);
             }
 
-            if (buf[MSGBUF_PAYLOAD] & IDENT_RELAY)
+            if (md->msg_buf[MSGBUF_PAYLOAD] & IDENT_RELAY)
             {   if (pump.pump_state == PUMP_STATE_IDLE)         // Only init Relay test if the Pump controller is Idle
                 {   hardware.relay_test[0] = 5;                 // relay test will run for for 5 seconds (application second timer will turn it off)
                     df_relay_change(hardware.relay[0], 1);      // trun the relay on
                 }
+                else    // TODO - remove the else state and/or make a decision about valid states to allow relay test
+                {   hardware.relay_test[0] = 5;                 // relay test will run for for 5 seconds (application second timer will turn it off)
+                    df_relay_change(hardware.relay[0], 1);      // trun the relay on
+                }
             }
-
+            send_resp = true;
             break;     
         case FD_CMD_ACTION:
             c = handle_action_cmd(md, &buf[char_cnt]);        // act on the command (return val is the size of the reply msg (0 for no reply))
@@ -410,13 +456,9 @@ void interpret_msg(msg_data_t *md)
     }
 
     if (send_resp = true)
-    {   
-        c = make_lrc(buf, char_cnt);
+    {   c = make_lrc(buf, char_cnt);
         buf[char_cnt++] = c;
         char_cnt = ConsoleWrite(buf, char_cnt);  
-        
-        if (buf[MSGBUF_COMMAND] != 0x02)
-        {   NRFX_LOG_INFO("Tx [%d] chars, Cmd [%x]", char_cnt, buf[MSGBUF_COMMAND]);    }
     }
 }
 
@@ -561,13 +603,11 @@ uint8_t MakeSimpleCRC(uint8_t Byte, uint8_t History)
 
 
 void clear_rx_bufs(void)
-{
-    //nrf_serial_rx_drain(p_serial);             // clear out received chars
-    con_comms.rx_buf[0] = 0;                              // Wipe the SOH character from the buffer
+{   con_comms.rx_buf[0] = 0;                              // Wipe the SOH character from the buffer
     con_comms.rx_buf[(con_comms.rx_char_count - 1)] = 0;    // Wipe the EOF character from the buffer    
     con_comms.rx_char_count = 0;
+    con_comms.in_char_count = 0;
     con_comms.rx_state = RX_IS_IDLE;
-    
 }
 
 uint8_t IsStuffable(char theChar)
@@ -586,11 +626,6 @@ size_t ConsoleWrite(char *buf, uint8_t count)
     size_t sent = 0;
     tx_char_count = 0;
     struct nrf_serial_s const * tp_serial;
-
-    //TODO - Do i need to allow rx during tx when in dicovery mode (in case multiple devices answer at once)
-    ///if (ddpc.nv_immediate.dev_address != DISCOVERY_DFLT_ADDR)           // At the moment only check for collisions in adoption
-    //{      }                         // disable the comms receiver when we're not in adoption mode
-    nrf_libuarte_drv_rx_stop(&intbus);
 
     clear_rx_bufs();
     
@@ -616,11 +651,11 @@ size_t ConsoleWrite(char *buf, uint8_t count)
     return(sent);
 }
 
+
 ret_code_t swap_baud(const nrf_libuarte_drv_t * const p_libuarte)
 {   ret_code_t ret; 
 
-    // TODO - reimplement baud swapping
-    // wrapping_inc((uint32_t*)&con_comms.baud_index, 0, NUM_BAUD_RATES);
+    wrapping_inc(&con_comms.baud_index, 0, NUM_BAUD_RATES);
     NRF_LOG_INFO("Baud rate changed to index %d = %d", con_comms.baud_index, baud_list[con_comms.baud_index]);
     
     con_comms.comms_state = COMMS_AUTOBAUD;
@@ -629,12 +664,11 @@ ret_code_t swap_baud(const nrf_libuarte_drv_t * const p_libuarte)
 
     nrf_gpio_pin_clear(TX_ENABLE);    
 
-    //ret = nrf_libuarte_drv_init(p_libuarte, p_config, evt_handler, context);
+    ret = PortInit(baud_list[con_comms.baud_index]);
     if (ret != NRFX_SUCCESS)
     {    NRFX_LOG_INFO("Serial 1st init failure [%x]", ret);  }
 
-    nrf_uarte_baudrate_set(p_libuarte->uarte, baud_list[con_comms.baud_index]);
-
+    //nrf_uarte_baudrate_set(p_libuarte->uarte, baud_list[con_comms.baud_index]);
 
     return(ret);
 }

@@ -18,6 +18,7 @@ ddpc_t ddpc = DF_DDPC_DFLT;
 pump_controller_t pump = DF_PUMP_DFLT;
 comp_controller_t components = DF_COMP_DFLT;
 app_state_t app_state = DF_APP_STATE_DLFT;
+static uint8_t console_port_check = 0;
 
 // function prototypes
 void temp_handler(int raw_temp);
@@ -113,7 +114,7 @@ void app_timer_handle(void * p_context)
                         if (hardware.relay_test[0] == 0)                // Once it's back to 0
                         {   df_relay_change(hardware.relay[0], 0);  }   // .. turn the relay off
                     }
-
+                    
                     break;
                 case APP_STATE_10S:                             
                     if (flash_control.gc_required)
@@ -133,6 +134,8 @@ void app_timer_handle(void * p_context)
                 default:
                     break;
             }
+
+            comms_timer_tick(i);                // Call the rolling comms timer function
         }
     }
 }

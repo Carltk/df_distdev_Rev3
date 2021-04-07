@@ -1,16 +1,16 @@
 #ifndef DF_CONSOLE_COMMS_H__
 #define DF_CONSOLE_COMMS_H__
 
-
 #include "app_error.h"
-#include "nrf_libuarte_drv.h"
-#include "nrf_queue.h"
+#include "df_libuarte_drv.h"
 
 #define NUM_BAUD_RATES 5
 #define BAUD_LIST { NRF_UARTE_BAUDRATE_4800, NRF_UARTE_BAUDRATE_9600, NRF_UARTE_BAUDRATE_19200, NRF_UARTE_BAUDRATE_38400, NRF_UARTE_BAUDRATE_115200 }
 
+#define INBUF_SIZE      1
 #define RX_BUF_SIZE     128
 #define TX_BUF_SIZE     128
+#define MSG_BUF_SIZE    128
 
 // #define DISCOVERY_DFLT_ADDR   0xFFFE  - This is defined in sdk_config.h
 #define ALL_CALL_ADDR         0xFFFF  
@@ -87,6 +87,7 @@ typedef struct
     uint16_t discovery_temp_addr;   // In discovery mode, holds the new temp address until a succesful response is send (and the real address can be changed to this one)
     rx_state_t rx_state;            // Status of the Comms receiver
     uint8_t rx_char_count;
+    uint8_t in_char_count;
     char *rx_buf;                   // Pointer to the Rx Buffer
     
     uint8_t tx_collision;          // Flag to show that there was a bus collision
@@ -94,12 +95,14 @@ typedef struct
 } con_comms_t;
 extern con_comms_t con_comms;    
 
+extern char inbuf[INBUF_SIZE];    
 extern char rx_buf[RX_BUF_SIZE];    
 extern char tx_buf[TX_BUF_SIZE];    
 
 typedef struct 
 {   // some context that will be passed into the comms event handler
     con_comms_t * con_comms;        // a pointer to the comms-management structure
+    char * inbuf;
     char * rx_buf;               // Pointer to the rx buffer
     char * tx_buf;
 } comms_context_t;
@@ -107,7 +110,8 @@ typedef struct
 extern comms_context_t comms_context;
 
 #define COMMS_CONTEXT_DEFAULT                   \
-{   .rx_buf = rx_buf,                          \
+{   .inbuf = inbuf,                            \
+    .rx_buf = rx_buf,                          \
     .tx_buf = tx_buf,                          \
 }
 
@@ -121,12 +125,13 @@ extern comms_context_t comms_context;
     .discovery_temp_addr = DISCOVERY_DFLT_ADDR, \
     .rx_state = RX_IS_IDLE,                     \
     .rx_char_count = 0,                         \
+    .in_char_count = 0,                         \
     .rx_buf = (char *)&rx_buf,                  \
     .tx_collision = 0,                          \
     .err_count = 0,                             \
 }
 
-extern char msg_buf[RX_BUF_SIZE];    
+extern char msg_buf[MSG_BUF_SIZE];    
 
 typedef enum {
     MSG_INCOMPLETE = 0,
@@ -187,7 +192,6 @@ size_t ConsoleWrite(char *buf, uint8_t count);
  * */
 uint8_t makeCommsStatusFlashes(uint8_t idx, uint8_t commsStatus);
 // void comms_clear(void);
-
 
 
 #endif // DF_CONSOLE_COMMS_H__

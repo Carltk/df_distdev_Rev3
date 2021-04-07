@@ -9,7 +9,7 @@
 
 void do_sys_reset(void);
 uint8_t inc_is_error(uint8_t *cnt, uint8_t threshold);
-void wrapping_inc(uint32_t *val, uint32_t lower, uint32_t upper);
+void wrapping_inc(uint8_t *val, uint32_t lower, uint32_t upper);
 uint16_t buf2int(char *buf);
 void int2buf(char *buf, uint16_t val);
 void long2buf(char *buf, uint32_t val);

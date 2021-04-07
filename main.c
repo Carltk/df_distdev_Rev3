@@ -78,6 +78,9 @@
 #define OP_QUEUES_SIZE          3
 #define APP_TIMER_PRESCALER     NRF_SERIAL_APP_TIMER_PRESCALER  
 
+static uint8_t HelloDDPC[] = "U";
+static uint8_t HelloLen = sizeof(HelloDDPC);
+
 
 int main(void)
 {   ret_code_t ret; 
@@ -117,7 +120,7 @@ int main(void)
 
     NRF_LOG_INFO("DF_DistDev - Main Loop Starting");
 
-    ConsoleWrite("Hello DDPC", 10);
+    ConsoleWrite(HelloDDPC, HelloLen);
 
     while (true)
     {

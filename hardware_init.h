@@ -107,9 +107,11 @@ typedef struct
 {   // Inputs
     uint8_t nozzle[NUM_NOZZLES];
     uint8_t nozzle_pin[NUM_NOZZLES];
+    bool nozzle_inverted[NUM_NOZZLES];
 
     uint8_t gpin[NUM_GPIS];
     uint8_t gpin_pin[NUM_GPIS];
+    bool gpin_inverted[NUM_GPIS];
 
     uint8_t pushbutton[NUM_PBS];
     uint8_t pushbutton_pin[NUM_PBS];
@@ -123,7 +125,7 @@ typedef struct
 
     uint8_t psense[NUM_PSENSE];
     uint8_t psense_pin[NUM_PSENSE];
-
+    bool psense_inverted[NUM_PSENSE];
 
     // Outputs
     uint8_t relay[NUM_RELAYS];

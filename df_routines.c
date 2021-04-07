@@ -23,7 +23,7 @@ uint8_t inc_is_error(uint8_t *cnt, uint8_t threshold)
     return(ret);
 }
 
-void wrapping_inc(uint32_t *val, uint32_t lower, uint32_t upper)
+void wrapping_inc(uint8_t *val, uint32_t lower, uint32_t upper)
 {   *val += 1;         
     if (*val >= upper) *val = lower;
 }

@@ -88,10 +88,13 @@ ret_code_t df_inputs_init(void)
 {   ret_code_t ret = NRFX_SUCCESS;
 
     hardware.nozzle_pin[0] = NOZZLE_PIN;            // There is only one nozzle at the moment
+    hardware.nozzle_inverted[0] = true;
     hardware.pushbutton_pin[MODE_PB_IDX] = MODE_PB_PIN;
     hardware.pushbutton_pin[MAG_PB_IDX] = MAG_SENSE_PIN;
     hardware.gpin_pin[0] = GPIN_PIN;
+    hardware.gpin_inverted[0] = true;
     hardware.psense_pin[0] = PSENSE_PIN; 
+    hardware.psense_inverted[0] = false;
     //hardware.nozzle_pin[1] = NOZZLE_2_PIN;        // Add more like this
 
     ret = app_button_init(p_button, sizeof(p_button) / sizeof(p_button[digi_in_nozzle]), BUTTON_DEBOUNCE_MS);
@@ -115,13 +118,18 @@ NI_x:   // Special handling while starting
  */
 void df_nozzle_handler(uint8_t pin_no, uint8_t button_action)
 {   
+    uint8_t pinval;
+
     for (uint8_t i=0;i<NUM_NOZZLES;i++)
     {   if (hardware.nozzle_pin[i] = pin_no)                // Find the nozzle we're looking for
-        {   hardware.nozzle[i] = button_action;             // mirror the state of the hardware to the generic hardware abstraction
-            pump.nozzle = button_action;                    // also the pump view
-            components.nozzle = button_action;              // and the component view
+        {   
+            pinval = button_action ^ hardware.nozzle_inverted[i];
 
-            if (button_action)  
+            hardware.nozzle[i] = pinval;             // mirror the state of the hardware to the generic hardware abstraction
+            pump.nozzle = pinval;                    // also the pump view
+            components.nozzle = pinval;              // and the component view
+
+            if (pinval)  
             {   pump.pump_status |= PUMP_STATUS_NOZZLE;                 // set the pump status bit
                 components.comp_status |= CONTROLLER_STATUS_NOZZLE;     // and component status bit
             }
@@ -130,7 +138,7 @@ void df_nozzle_handler(uint8_t pin_no, uint8_t button_action)
                 components.comp_status &= ~CONTROLLER_STATUS_NOZZLE;
             }
 
-            NRFX_LOG_INFO("Nozzle [%d] State [%x]", i, button_action); 
+            NRFX_LOG_INFO("Nozzle [%d] State [%x]", i, pinval); 
 
             break;
         }
@@ -160,13 +168,13 @@ void df_mode_handler(uint8_t pin_no, uint8_t button_action)
 
 
 void df_psense_handler(uint8_t pin_no, uint8_t button_action)
-{
-    //if (button_action)  led_go(LED_HB, LED_FLASH_MED, 10000);   
+{   uint8_t pinval;    
     
     for (uint8_t i=0;i<NUM_PSENSE;i++)                         // The mode button handler is in the application timer handler so that different hold-times can be determined
-    {   if (hardware.psense_pin[i] = pin_no) 
-        {   hardware.psense[i] = button_action; 
-            NRFX_LOG_INFO("PowerSense [%d] State [%x]", i, button_action); 
+    {   if (hardware.psense_pin[i] = pin_no)    
+        {   pinval = button_action ^ hardware.psense_inverted[i];
+            hardware.psense[i] = pinval; 
+            NRFX_LOG_INFO("PowerSense [%d] State [%x]", i, pinval); 
             break;
         }
     }    
@@ -175,12 +183,13 @@ void df_psense_handler(uint8_t pin_no, uint8_t button_action)
 
 void df_gpin_handler(uint8_t pin_no, uint8_t button_action)
 {
-    // if (button_action)  led_go(LED_HB, LED_FLASH_MED, 10000);   
-    
+    uint8_t pinval;    
+
     for (uint8_t i=0;i<NUM_GPIS;i++)                         // The mode button handler is in the application timer handler so that different hold-times can be determined
     {   if (hardware.gpin_pin[i] = pin_no) 
-        {   hardware.gpin[i] = button_action; 
-            NRFX_LOG_INFO("GPIn [%d] State [%x]", i, button_action); 
+        {   pinval = button_action ^ hardware.gpin_inverted[i]; 
+            hardware.gpin[i] = pinval; 
+            NRFX_LOG_INFO("GPIn [%d] State [%x]", i, pinval); 
             break;
         }
     }    
