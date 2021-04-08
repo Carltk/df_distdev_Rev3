@@ -60,11 +60,15 @@
 #include "nrf_log.h"
 NRF_LOG_MODULE_REGISTER();
 
-#define MAX_DMA_XFER_LEN    ((1UL << UARTE0_EASYDMA_MAXCNT_SIZE) - 1)
+#define MAX_DMA_XFER_LEN    ((1UL << <UARTE0_EASYDMA_MAXCNT_SIZE>>) - 1)
 
-#define INTERRUPTS_MASK  \
+
+#define INTERRUPTS_MASK  \>>
     (NRF_UARTE_INT_ENDRX_MASK | NRF_UARTE_INT_RXSTARTED_MASK | NRF_UARTE_INT_ERROR_MASK | \
-     NRF_UARTE_INT_ENDTX_MASK | NRF_UARTE_INT_TXSTOPPED_MASK)
+     NRF_UARTE_INT_ENDTX_MASK | NRF_UARTE_INT_TXSTOPPED_MASK | NRF_UARTE_INT_RXDRDY)
+
+// ENDRX -> EasyDMA has finished accessing the Rx Buffer in RAM (Receive buffer is filled up)
+// RXDRDY -> Character received (but may not yet be in Data RAM) 
 
 static const nrf_libuarte_drv_t * m_libuarte_instance[2];
 
@@ -269,6 +273,7 @@ static ret_code_t ppi_configure(const nrf_libuarte_drv_t * const p_libuarte,
 
     if (MAX_DMA_XFER_LEN < UINT16_MAX)
     {
+        // PPI -> Link Uarte EndTX Event with Uarte StartTx Task 
         ret = ppi_channel_configure(
                 &p_libuarte->ctrl_blk->ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_ENDTX_STARTTX],
                 nrf_uarte_event_address_get(p_libuarte->uarte, NRF_UARTE_EVENT_ENDTX),
@@ -280,21 +285,23 @@ static ret_code_t ppi_configure(const nrf_libuarte_drv_t * const p_libuarte,
         }
     }
 
+    // PPI -> Link Uarte RxdRdy (char Rxd) Event with Timer Count Task 
     ret = ppi_channel_configure(
             &p_libuarte->ctrl_blk->ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_RXRDY_TIMER_COUNT],
             nrf_uarte_event_address_get(p_libuarte->uarte, NRF_UARTE_EVENT_RXDRDY),
-            nrfx_timer_task_address_get(&p_libuarte->timer, NRF_TIMER_TASK_COUNT),
-            0);
+            nrfx_timer_task_address_get(&p_libuarte->timer, NRF_TIMER_TASK_COUNT)
+            , 0);
     if (ret != NRF_SUCCESS)
     {
         goto complete_config;
     }
 
+    // PPI -> Link Uarte EndRx (buffer full) Event with Uarte StartRx Task and Fork to move timer Count into Capture/Compare channel 0
     ret = ppi_channel_configure(
             &p_libuarte->ctrl_blk->ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_ENDRX_STARTRX],
             nrf_uarte_event_address_get(p_libuarte->uarte, NRF_UARTE_EVENT_ENDRX),
             nrf_uarte_task_address_get(p_libuarte->uarte, NRF_UARTE_TASK_STARTRX),
-            nrfx_timer_capture_task_address_get(&p_libuarte->timer, 0));
+            nrfx_timer_capture_task_address_get(&p_libuarte->timer, DF_COUNT_CHAN_RXD_CHARS));
     if (ret != NRF_SUCCESS)
     {
         goto complete_config;
@@ -302,16 +309,20 @@ static ret_code_t ppi_configure(const nrf_libuarte_drv_t * const p_libuarte,
 
     if (p_config->endrx_evt && p_config->rxdone_tsk)
     {
+        // if the application passes in event/tasks in its config, implement a PPI connection
+        //  PPI -> Uarte EndRx (buffer full) to move timer Count into Capture/Compare channel 0 and Fork to passed-in task
         ret = ppi_channel_configure(
                 &p_libuarte->ctrl_blk->ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_ENDRX_EXT_TSK],
                 nrf_uarte_event_address_get(p_libuarte->uarte, NRF_UARTE_EVENT_ENDRX),
-                nrfx_timer_capture_task_address_get(&p_libuarte->timer, 0),
+                nrfx_timer_capture_task_address_get(&p_libuarte->timer, DF_COUNT_CHAN_RXD_CHARS),
                 p_config->rxdone_tsk);
         if (ret != NRF_SUCCESS)
         {
             goto complete_config;
         }
 
+        // if the application passes in event/tasks in its config, implement a PPI connection
+        //  Set up a PPI Group
         ret = ppi_group_configure(&p_libuarte->ctrl_blk->ppi_groups[NRF_LIBUARTE_DRV_PPI_GROUP_ENDRX_STARTRX],
                 p_libuarte->ctrl_blk->ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_ENDRX_STARTRX],
                 &gr0_en_task, &gr0_dis_task, true);
@@ -332,7 +343,7 @@ static ret_code_t ppi_configure(const nrf_libuarte_drv_t * const p_libuarte,
                 &p_libuarte->ctrl_blk->ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_EXT_STOP_STOPRX],
                 p_config->endrx_evt,
                 nrf_uarte_task_address_get(p_libuarte->uarte, NRF_UARTE_TASK_STOPRX),
-                nrfx_timer_capture_task_address_get(&p_libuarte->timer, 1));
+                nrfx_timer_capture_task_address_get(&p_libuarte->timer, DF_COUNT_CHAN_OPT_RXD));
         if (ret != NRF_SUCCESS)
         {
             goto complete_config;
@@ -383,7 +394,7 @@ static ret_code_t ppi_configure(const nrf_libuarte_drv_t * const p_libuarte,
     if (LIBUARTE_DRV_WITH_HWFC && (p_config->rts_pin != NRF_UARTE_PSEL_DISCONNECTED))
     {
         ret = ppi_channel_configure(&p_libuarte->ctrl_blk->ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_RTS_PIN],
-                nrfx_timer_compare_event_address_get(&p_libuarte->timer, 2),
+                nrfx_timer_compare_event_address_get(&p_libuarte->timer, DF_COUNT_CHAN_CHARS_AT_RTS),
                 nrfx_gpiote_set_task_addr_get(p_config->rts_pin),
                 0);
         if (ret != NRF_SUCCESS)
@@ -405,8 +416,22 @@ complete_config:
 
 void tmr_evt_handler(nrf_timer_event_t event_type, void * p_context)
 {
-    UNUSED_PARAMETER(event_type);
+    //UNUSED_PARAMETER(event_type);     // original
+    
+    switch(event_type)                  // Datafuel 
+    {
+        case NRF_TIMER_EVENT_COMPARE0:
+            break;
+        case NRF_TIMER_EVENT_COMPARE1:
+            break;
+        case NRF_TIMER_EVENT_COMPARE2:
+            break;
+        case NRF_TIMER_EVENT_COMPARE3:
+            break;
+    }
+
     UNUSED_PARAMETER(p_context);
+
 }
 
 ret_code_t nrf_libuarte_drv_init(const nrf_libuarte_drv_t * const p_libuarte,
@@ -641,7 +666,7 @@ ret_code_t nrf_libuarte_drv_rx_start(const nrf_libuarte_drv_t * const p_libuarte
     {
         uint32_t rx_limit = len - NRF_LIBUARTE_DRV_HWFC_BYTE_LIMIT;
         *(uint32_t *)nrfx_gpiote_clr_task_addr_get(p_libuarte->ctrl_blk->rts_pin) = 1;
-        nrfx_timer_compare(&p_libuarte->timer, NRF_TIMER_CC_CHANNEL2, rx_limit, false);
+        nrfx_timer_compare(&p_libuarte->timer, DF_COUNT_CHAN_CHARS_AT_RTS, rx_limit, false);    // NRF_TIMER_CC_CHANNEL2
     }
 
     if (!ext_trigger_en)
@@ -670,9 +695,9 @@ void nrf_libuarte_drv_rx_buf_rsp(const nrf_libuarte_drv_t * const p_libuarte,
 
     if (LIBUARTE_DRV_WITH_HWFC && (p_libuarte->ctrl_blk->rts_pin != RTS_PIN_DISABLED))
     {
-        uint32_t rx_limit = nrfx_timer_capture_get(&p_libuarte->timer, NRF_TIMER_CC_CHANNEL0) +
+        uint32_t rx_limit = nrfx_timer_capture_get(&p_libuarte->timer, DF_COUNT_CHAN_RXD_CHARS) +
                 2*len - NRF_LIBUARTE_DRV_HWFC_BYTE_LIMIT;
-        nrfx_timer_compare(&p_libuarte->timer, NRF_TIMER_CC_CHANNEL2, rx_limit, false);
+        nrfx_timer_compare(&p_libuarte->timer, DF_COUNT_CHAN_CHARS_AT_RTS, rx_limit, false);
         if (p_libuarte->ctrl_blk->rts_manual == false)
         {
             *(uint32_t *)nrfx_gpiote_clr_task_addr_get(p_libuarte->ctrl_blk->rts_pin) = 1;
@@ -713,6 +738,26 @@ void nrf_libuarte_drv_rts_set(const nrf_libuarte_drv_t * const p_libuarte)
 
 static void irq_handler(const nrf_libuarte_drv_t * const p_libuarte)
 {
+    // New Event Added - 
+    if (nrf_uarte_event_check(p_libuarte->uarte, NRF_UARTE_EVENT_RXDRDY))
+    {
+
+        // !!!! I have receoved a characters
+
+        // Here I want check the character
+
+        // Not sure if it will be in RAM yet
+
+        // Can I peek at it in the UART????
+
+        // Once I get the character ..
+            // See if it's SOH
+                // If it's SOH .. toss out the buffer and start again. Arrange the buffer so that the SOH is inserted
+                    // Once I have a SOH, I can accumulate chars until I get EOF
+                    // Once I have EOF, bubble up an interrupt to the application layer
+
+    }
+    
     if (nrf_uarte_event_check(p_libuarte->uarte, NRF_UARTE_EVENT_ERROR))
     {
         nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_ERROR);
@@ -737,8 +782,8 @@ static void irq_handler(const nrf_libuarte_drv_t * const p_libuarte)
     {
         nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_ENDRX);
 
-        uint32_t endrx_byte_cnt = nrfx_timer_capture_get(&p_libuarte->timer, NRF_TIMER_CC_CHANNEL0);
-        uint32_t stop_byte_cnt  = nrfx_timer_capture_get(&p_libuarte->timer, NRF_TIMER_CC_CHANNEL1);
+        uint32_t endrx_byte_cnt = nrfx_timer_capture_get(&p_libuarte->timer, DF_COUNT_CHAN_RXD_CHARS);
+        uint32_t stop_byte_cnt  = nrfx_timer_capture_get(&p_libuarte->timer, DF_COUNT_CHAN_OPT_RXD);
 
         uint32_t dma_amount = endrx_byte_cnt - p_libuarte->ctrl_blk->last_rx_byte_cnt;
         uint32_t pin_amount = stop_byte_cnt - p_libuarte->ctrl_blk->last_pin_rx_byte_cnt;
@@ -856,10 +901,6 @@ static void irq_handler(const nrf_libuarte_drv_t * const p_libuarte)
 
     }
 }
-
-bool nrf_libuarte_drv_rx_enabled(const nrf_libuarte_drv_t * const p_libuarte)
-{   return(p_libuarte->ctrl_blk->p_cur_rx != NULL);  }
-
 
 #if NRF_LIBUARTE_DRV_UARTE0
 void libuarte_0_irq_handler(void)

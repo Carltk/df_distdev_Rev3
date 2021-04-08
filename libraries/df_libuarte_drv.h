@@ -64,6 +64,16 @@
 /* Number of bytes available in the buffer when RTS line is set. */
 #define NRF_LIBUARTE_DRV_HWFC_BYTE_LIMIT 4
 
+
+typedef enum
+{
+    DF_COUNT_CHAN_RXD_CHARS = 0,
+    DF_COUNT_CHAN_OPT_RXD,
+    DF_COUNT_CHAN_CHARS_AT_RTS,
+    DF_COUNT_CHAN_UNUSED
+} df_count_chan_t;
+
+
 typedef enum
 {
     NRF_LIBUARTE_DRV_EVT_RX_DATA,    ///< Data received.
@@ -177,7 +187,6 @@ typedef struct {
 } nrf_libuarte_drv_t;
 
 
-/* -- original Nordic version
 #define NRF_LIBUARTE_DRV_DEFINE(_name, _uarte_idx, _timer_idx) \
     STATIC_ASSERT(_uarte_idx < UARTE_COUNT, "UARTE instance not present");\
     STATIC_ASSERT(CONCAT_2(NRF_LIBUARTE_DRV_UARTE,_uarte_idx) == 1, "UARTE instance not enabled");\
@@ -188,8 +197,8 @@ typedef struct {
         .timer = NRFX_TIMER_INSTANCE(_timer_idx), \
         .uarte = CONCAT_2(NRF_UARTE, _uarte_idx),\
     }
-*/
-// Datafuel version
+
+/* // Datafuel version
 #define NRF_LIBUARTE_DRV_DEFINE(_name, _uarte_idx, _timer_idx) \
     STATIC_ASSERT(_uarte_idx < UARTE_COUNT, "UARTE instance not present");\
     STATIC_ASSERT(CONCAT_2(NRF_LIBUARTE_DRV_UARTE,_uarte_idx) == 1, "UARTE instance not enabled");\
@@ -200,7 +209,7 @@ typedef struct {
         .timer = NRFX_TIMER_INSTANCE(_timer_idx), \
         .uarte = CONCAT_2(NRF_UARTE, _uarte_idx),\
     }
-
+*/
 
 
 /**
