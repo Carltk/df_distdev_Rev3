@@ -7,7 +7,8 @@
 #define NUM_BAUD_RATES 5
 #define BAUD_LIST { NRF_UARTE_BAUDRATE_4800, NRF_UARTE_BAUDRATE_9600, NRF_UARTE_BAUDRATE_19200, NRF_UARTE_BAUDRATE_38400, NRF_UARTE_BAUDRATE_115200 }
 
-#define INBUF_SIZE      1
+#define INBUF_SIZE      128
+#define PACKET_SIZE     128
 #define RX_BUF_SIZE     128
 #define TX_BUF_SIZE     128
 #define MSG_BUF_SIZE    128
@@ -88,32 +89,19 @@ typedef struct
     rx_state_t rx_state;            // Status of the Comms receiver
     uint8_t rx_char_count;
     uint8_t in_char_count;
-    char *rx_buf;                   // Pointer to the Rx Buffer
+    char * rx_buf;                   // Pointer to the Rx Buffer
     
     uint8_t tx_collision;          // Flag to show that there was a bus collision
     uint8_t err_count;
 } con_comms_t;
 extern con_comms_t con_comms;    
 
-extern char inbuf[INBUF_SIZE];    
+extern char inbuf[INBUF_SIZE];  
+extern char pkt_buf[PACKET_SIZE]; 
+   
 extern char rx_buf[RX_BUF_SIZE];    
 extern char tx_buf[TX_BUF_SIZE];    
 
-typedef struct 
-{   // some context that will be passed into the comms event handler
-    con_comms_t * con_comms;        // a pointer to the comms-management structure
-    char * inbuf;
-    char * rx_buf;               // Pointer to the rx buffer
-    char * tx_buf;
-} comms_context_t;
-
-extern comms_context_t comms_context;
-
-#define COMMS_CONTEXT_DEFAULT                   \
-{   .inbuf = inbuf,                            \
-    .rx_buf = rx_buf,                          \
-    .tx_buf = tx_buf,                          \
-}
 
 #define COMMS_TH_ERR        6
 #define COMMS_TH_NOT_SOH    50
@@ -126,7 +114,7 @@ extern comms_context_t comms_context;
     .rx_state = RX_IS_IDLE,                     \
     .rx_char_count = 0,                         \
     .in_char_count = 0,                         \
-    .rx_buf = (char *)&rx_buf,                  \
+    .rx_buf = pkt_buf,                          \
     .tx_collision = 0,                          \
     .err_count = 0,                             \
 }

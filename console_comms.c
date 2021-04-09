@@ -16,8 +16,6 @@
 #define EOF_CHAR        0xD2
 #define MSG_DELIM       0xD3
 
-#define MSG_MIN_SIZE    5
-
 #define MSGBUF_TYPE     0  
 #define MSGBUF_ADDR     1
 #define MSGBUF_COMMAND  3
@@ -36,8 +34,10 @@ uint32_t baud_list[NUM_BAUD_RATES] = BAUD_LIST;
 
 // Message received from comms
 char inbuf[INBUF_SIZE];
+char pkt_buf[PACKET_SIZE]; 
+
 char rx_buf[RX_BUF_SIZE];    
-con_comms_t con_comms = RX_DATA_DEFAULT;
+con_comms_t con_comms;
 
 // Processed received message (i.e. no SOH, EOF)
 char msg_buf[MSG_BUF_SIZE];    
@@ -46,8 +46,6 @@ static msg_data_t msg_data = MSG_DATA_DEFAULT;
 // Message sent  out
 char tx_buf[TX_BUF_SIZE];
 uint8_t tx_char_count;
-
-comms_context_t comms_context = COMMS_CONTEXT_DEFAULT;
 
 NRF_LIBUARTE_DRV_DEFINE(intbus, DF_PORT_INTBUS, DF_COMMS_TIMER_INST);
 
@@ -82,11 +80,12 @@ ret_code_t ConsoleSerialPortInit(void)
 {   ret_code_t ret = NRFX_SUCCESS;
 
     con_comms.comms_state = COMMS_INIT;
+    con_comms.rx_buf = pkt_buf;
 
     nrf_gpio_cfg_output(TX_ENABLE);
     nrf_gpio_pin_clear(TX_ENABLE);    
 
-    con_comms.baud_index = 2;       // TODO - this value set to 19200 to test baud cycling .. default should be Console Default = 9600 (index 1)
+    con_comms.baud_index = 1;       // TODO - this value set to 19200 to test baud cycling .. default should be Console Default = 9600 (index 1)
     ret = PortInit(baud_list[con_comms.baud_index]);
 
     NRFX_LOG_INFO("Serial (IntBus) Port - Initialised"); 
@@ -101,24 +100,17 @@ ret_code_t PortInit(nrf_uarte_baudrate_t baud)
     nrf_libuarte_drv_config_t nrf_libuarte_drv_config = {
         .tx_pin     = TX_PIN_NUMBER,
         .rx_pin     = RX_PIN_NUMBER,
-        //.rts_pin = RTS_PIN_NUMBER,      
-        //.cts_pin = CTS_PIN_NUMBER,      
-        .hwfc = NRF_UARTE_HWFC_DISABLED,          ///< Flow control configuration.
-        .parity = NRF_UARTE_PARITY_EXCLUDED,        ///< Parity configuration.
-        .baudrate = baud,   ///< Baud rate.
-        .irq_priority = APP_IRQ_PRIORITY_LOW,  ///< Interrupt priority.
-        .pullup_rx = 1,     ///< Pull up on RX pin.
-        //.startrx_evt,   ///< Event to trigger STARTRX task in UARTE.
-        //.endrx_evt,     ///< Event to trigger STOPRX task in UARTE.
-        //.rxstarted_tsk, ///< Task to be triggered when RXSTARTED UARTE event occurs.
-        //.rxdone_tsk,    ///< Task to be triggered when ENDRX UARTE event occurs.
+        .parity = NRF_UARTE_PARITY_EXCLUDED,    ///< Parity configuration.
+        .baudrate = baud,                       ///< Baud rate.
+        .irq_priority = APP_IRQ_PRIORITY_LOW,   ///< Interrupt priority.
+        .pullup_rx = 1,                         ///< Pull up on RX pin.
     };
 
-    ret = nrf_libuarte_drv_init(&intbus, &nrf_libuarte_drv_config, &comms_evt_handler, &comms_context);
+    ret = nrf_libuarte_drv_init(&intbus, &nrf_libuarte_drv_config, &comms_evt_handler, NULL);
     if (ret != NRFX_SUCCESS)
     {    NRFX_LOG_INFO("Serial init failure [%x]", ret);  }
     
-    ret = nrf_libuarte_drv_rx_start(&intbus, inbuf, INBUF_SIZE, false);               // (re)enable the receiver    
+    ret = nrf_libuarte_drv_rx_start(&intbus, inbuf, INBUF_SIZE, pkt_buf, PACKET_SIZE);               // (re)enable the receiver    
     if (ret != NRFX_SUCCESS)
     {    NRFX_LOG_INFO("Serial start failure [%x]", ret);  }
     
@@ -127,12 +119,23 @@ ret_code_t PortInit(nrf_uarte_baudrate_t baud)
 
 void comms_timer_tick(uint8_t timer_val)
 {   // called by the application timer 
+    df_packet_stats_t * ps;
     
     switch(timer_val)
     {
         case APP_STATE_100MS:
             break;
         case APP_STATE_1S:
+            ps = get_packet_stats(&intbus);
+
+            NRFX_LOG_INFO("Comms Status: chars[%d], SOH[%d], EOF[%d], err[%d], good packets[%d], total packets[%d] ",
+                        ps->total_chars,
+                        ps->SOH_cnt,
+                        ps->EOF_cnt,
+                        ps->err_cnt,
+                        ps->good_packets,
+                        ps->total_packets);
+
             break;
         case APP_STATE_10S:
             break;
@@ -150,6 +153,15 @@ void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
 
     switch (p_evt->type)
     {
+        case NRF_LIBUARTE_DRV_EVT_GOT_PACKET:
+            // handle reception of a qualified (D1 // D2) packet 
+            get_msg_data(&msg_data, &con_comms);  
+            
+            nrf_libuarte_drv_rx_start(&intbus, inbuf, INBUF_SIZE, pkt_buf, PACKET_SIZE);               // (re)enable the receiver    
+
+            break;
+
+        case NRF_LIBUARTE_DRV_EVT_DBG_FULL:
         case NRF_LIBUARTE_DRV_EVT_RX_DATA:    ///< Data received.
 
                 c = *p_evt->data.rxtx.p_data;

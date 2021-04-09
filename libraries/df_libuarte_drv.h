@@ -64,23 +64,30 @@
 /* Number of bytes available in the buffer when RTS line is set. */
 #define NRF_LIBUARTE_DRV_HWFC_BYTE_LIMIT 4
 
+#define STUFF_CHAR      0xD0
+#define SOH_CHAR        0xD1
+#define EOF_CHAR        0xD2
+#define MSG_DELIM       0xD3
+#define MSG_MIN_SIZE    5
+#define START_LRC_CALC  1  
 
 typedef enum
-{
-    DF_COUNT_CHAN_RXD_CHARS = 0,
-    DF_COUNT_CHAN_OPT_RXD,
-    DF_COUNT_CHAN_CHARS_AT_RTS,
-    DF_COUNT_CHAN_UNUSED
+{   DF_COUNT_CHAN_RXD_CHARS = 0,
+    DF_COUNT_CHAN_RXD_TOTAL,
+    //DF_COUNT_CHAN_CHARS_AT_RTS,
+    //DF_COUNT_CHAN_UNUSED
 } df_count_chan_t;
 
 
 typedef enum
 {
-    NRF_LIBUARTE_DRV_EVT_RX_DATA,    ///< Data received.
-    NRF_LIBUARTE_DRV_EVT_RX_BUF_REQ, ///< Requesting new buffer for receiving data.
-    NRF_LIBUARTE_DRV_EVT_TX_DONE,    ///< Requested TX transfer completed.
-    NRF_LIBUARTE_DRV_EVT_ERROR,      ///< Error reported by the UARTE peripheral.
-    NRF_LIBUARTE_DRV_EVT_OVERRUN_ERROR    ///< Error reported by the driver.
+    NRF_LIBUARTE_DRV_EVT_RX_DATA,       ///< Data received.
+    NRF_LIBUARTE_DRV_EVT_RX_BUF_REQ,    ///< Requesting new buffer for receiving data.
+    NRF_LIBUARTE_DRV_EVT_TX_DONE,       ///< Requested TX transfer completed.
+    NRF_LIBUARTE_DRV_EVT_ERROR,         ///< Error reported by the UARTE peripheral.
+    NRF_LIBUARTE_DRV_EVT_OVERRUN_ERROR, ///< Error reported by the driver.
+    NRF_LIBUARTE_DRV_EVT_DBG_FULL,      ///< Debug buffer is full
+    NRF_LIBUARTE_DRV_EVT_GOT_PACKET     ///< Have received a datafuel Console comms packet
 } nrf_libuarte_drv_evt_type_t;
 
 /**
@@ -142,21 +149,32 @@ typedef struct {
     uint32_t             rx_pin;        ///< RXD pin number.
     uint32_t             cts_pin;       ///< CTS pin number.
     uint32_t             rts_pin;       ///< RTS pin number.
-    uint32_t             startrx_evt;   ///< Event to trigger STARTRX task in UARTE.
-    uint32_t             endrx_evt;     ///< Event to trigger STOPRX task in UARTE.
-    uint32_t             rxstarted_tsk; ///< Task to be triggered when RXSTARTED UARTE event occurs.
-    uint32_t             rxdone_tsk;    ///< Task to be triggered when ENDRX UARTE event occurs.
-    nrf_uarte_hwfc_t     hwfc;          ///< Flow control configuration.
     nrf_uarte_parity_t   parity;        ///< Parity configuration.
     nrf_uarte_baudrate_t baudrate;      ///< Baud rate.
     uint8_t              irq_priority;  ///< Interrupt priority.
     bool                 pullup_rx;     ///< Pull up on RX pin.
 } nrf_libuarte_drv_config_t;
 
-typedef void (*nrf_libuarte_drv_evt_handler_t)(void * context,
+typedef void (*nrf_libuarte_drv_evt_handler_t)(void * p_context,
                                                nrf_libuarte_drv_evt_t * p_evt);
 
 extern const IRQn_Type libuarte_irqn[];
+
+typedef struct {
+    bool got_SOH;
+    uint8_t SOH_locn;
+    uint8_t curr_locn;
+} df_packet_ctl_t;
+
+
+typedef struct {
+    uint32_t total_chars;
+    uint32_t SOH_cnt;
+    uint32_t EOF_cnt;
+    uint32_t err_cnt;
+    uint32_t good_packets;
+    uint32_t total_packets;
+} df_packet_stats_t;
 
 typedef struct {
     nrf_ppi_channel_t ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_MAX];
@@ -166,6 +184,11 @@ typedef struct {
     size_t tx_len;
     size_t tx_cur_idx;
 
+    uint8_t * p_packet_buf;          // Pointer to the packet buffer
+    uint8_t packet_len;              // number of characters in the packet
+    df_packet_ctl_t packet_ctl;      // internal control of packets   
+    df_packet_stats_t packet_stats;
+
     uint8_t * p_cur_rx;
     uint8_t * p_next_rx;
     uint8_t * p_next_next_rx;
@@ -173,10 +196,11 @@ typedef struct {
     uint32_t last_rx_byte_cnt;
     uint32_t last_pin_rx_byte_cnt;
     uint32_t chunk_size;
-    void * context;
+    void * p_context;
     uint16_t tx_chunk8;
+    
     uint8_t rts_pin;
-    bool rts_manual;
+
     bool enabled;
 } nrf_libuarte_drv_ctrl_blk_t;
 
@@ -224,7 +248,7 @@ typedef struct {
  */
 ret_code_t nrf_libuarte_drv_init(const nrf_libuarte_drv_t * const p_libuarte,
                                  nrf_libuarte_drv_config_t * p_config,
-                                 nrf_libuarte_drv_evt_handler_t evt_handler, void * context);
+                                 nrf_libuarte_drv_evt_handler_t evt_handler, void * p_context);
 
 /**
  * @brief Function for uninitializing the libUARTE library.
@@ -263,7 +287,7 @@ ret_code_t nrf_libuarte_drv_tx(const nrf_libuarte_drv_t * const p_libuarte,
  * @retval NRF_SUCCESS         Buffer set for receiving.
  */
 ret_code_t nrf_libuarte_drv_rx_start(const nrf_libuarte_drv_t * const p_libuarte,
-                                     uint8_t * p_data, size_t len, bool ext_trigger_en);
+                                     uint8_t * p_data, size_t len, uint8_t * pktbuf, size_t pktlen);
 
 /**
  * @brief Function for setting a buffer for data that will be later received in UARTE.
@@ -286,30 +310,15 @@ void nrf_libuarte_drv_rx_buf_rsp(const nrf_libuarte_drv_t * const p_libuarte,
 void nrf_libuarte_drv_rx_stop(const nrf_libuarte_drv_t * const p_libuarte);
 
 /**
- * @brief Function for deasserting RTS to pause the transmission.
- *
- * Flow control must be enabled.
- *
- * @param p_libuarte Pointer to libuarte instance.
- */
-void nrf_libuarte_drv_rts_clear(const nrf_libuarte_drv_t * const p_libuarte);
-
-/**
- * @brief Function for asserting RTS to restart the transmission.
- *
- * Flow control must be enabled.
- *
- * @param p_libuarte Pointer to libuarte instance.
- */
-void nrf_libuarte_drv_rts_set(const nrf_libuarte_drv_t * const p_libuarte);
-
-/**
  * @brief Function for requesting the on/off state of the receiver
  *
  * @param  p_libuarte Pointer to libuarte instance.
  * @retval bool - Enabled state of the receiver
  */
 bool nrf_libuarte_drv_rx_enabled(const nrf_libuarte_drv_t * const p_libuarte);
+
+
+df_packet_stats_t * get_packet_stats(const nrf_libuarte_drv_t * const p_libuarte);
 
 /** @} */
 
