@@ -82,12 +82,12 @@ typedef enum
 typedef enum
 {
     NRF_LIBUARTE_DRV_EVT_RX_DATA,       ///< Data received.
-    NRF_LIBUARTE_DRV_EVT_RX_BUF_REQ,    ///< Requesting new buffer for receiving data.
+    //NRF_LIBUARTE_DRV_EVT_RX_BUF_REQ,    ///< Requesting new buffer for receiving data.
     NRF_LIBUARTE_DRV_EVT_TX_DONE,       ///< Requested TX transfer completed.
     NRF_LIBUARTE_DRV_EVT_ERROR,         ///< Error reported by the UARTE peripheral.
     NRF_LIBUARTE_DRV_EVT_OVERRUN_ERROR, ///< Error reported by the driver.
-    NRF_LIBUARTE_DRV_EVT_DBG_FULL,      ///< Debug buffer is full
-    NRF_LIBUARTE_DRV_EVT_GOT_PACKET     ///< Have received a datafuel Console comms packet
+    NRF_LIBUARTE_DRV_EVT_GOT_PACKET,    ///< Have received a datafuel Console comms packet
+    NRF_LIBUARTE_DRV_EVT_ERR_PACKET     ///< Have received a datafuel Console comms packet with error(s)
 } nrf_libuarte_drv_evt_type_t;
 
 /**
@@ -125,8 +125,8 @@ typedef enum
 
 typedef struct
 {
-    uint8_t  * p_data; ///< Pointer to the data to be sent or received.
-    size_t     length; ///< Length of the data.
+    uint8_t  * p_data;  ///< Pointer to the data to be sent or received.
+    size_t     size;    ///< Size of the data buffer
 } nrf_libuarte_drv_data_t;
 
 typedef struct
@@ -153,6 +153,8 @@ typedef struct {
     nrf_uarte_baudrate_t baudrate;      ///< Baud rate.
     uint8_t              irq_priority;  ///< Interrupt priority.
     bool                 pullup_rx;     ///< Pull up on RX pin.
+    nrf_libuarte_drv_data_t rx_in_buf;     ///<buffer for incomming chars
+    nrf_libuarte_drv_data_t packet_buf;    ///<buffer for transferring packets
 } nrf_libuarte_drv_config_t;
 
 typedef void (*nrf_libuarte_drv_evt_handler_t)(void * p_context,
@@ -164,6 +166,8 @@ typedef struct {
     bool got_SOH;
     uint8_t SOH_locn;
     uint8_t curr_locn;
+    size_t packet_length;
+    bool checksum_ok;
 } df_packet_ctl_t;
 
 
@@ -180,27 +184,23 @@ typedef struct {
     nrf_ppi_channel_t ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_MAX];
     nrf_ppi_channel_group_t ppi_groups[NRF_LIBUARTE_DRV_PPI_GROUP_MAX];
 
-    uint8_t * p_tx;
-    size_t tx_len;
-    size_t tx_cur_idx;
+    // Tx buffer management
+    nrf_libuarte_drv_data_t tx_out_buf;
+    size_t    tx_cur_idx;
 
-    uint8_t * p_packet_buf;          // Pointer to the packet buffer
-    uint8_t packet_len;              // number of characters in the packet
-    df_packet_ctl_t packet_ctl;      // internal control of packets   
-    df_packet_stats_t packet_stats;
+    // Rx incomming buffer
+    nrf_libuarte_drv_data_t rx_in_buf;            //<buffer for incomming chars
 
-    uint8_t * p_cur_rx;
-    uint8_t * p_next_rx;
-    uint8_t * p_next_next_rx;
+    // Packet buffer management
+    nrf_libuarte_drv_data_t packet_buf;           //<buffer for transferring packets
+    size_t packet_length;
+
+    df_packet_ctl_t packet_ctl;     // control of packets    
+    df_packet_stats_t packet_stats; // status of packets for external use
+
     nrf_libuarte_drv_evt_handler_t evt_handler;
-    uint32_t last_rx_byte_cnt;
-    uint32_t last_pin_rx_byte_cnt;
-    uint32_t chunk_size;
-    void * p_context;
-    uint16_t tx_chunk8;
+    void * p_context;               // context block that can be passed in a config
     
-    uint8_t rts_pin;
-
     bool enabled;
 } nrf_libuarte_drv_ctrl_blk_t;
 
@@ -276,31 +276,11 @@ ret_code_t nrf_libuarte_drv_tx(const nrf_libuarte_drv_t * const p_libuarte,
  *        trigger to start receiving.
  *
  * @param p_libuarte      Pointer to libuarte instance.
- * @param p_data          Pointer to data.
- * @param len             Number of bytes to receive. Maximum possible length is
- *                        dependent on the used SoC (see the MAXCNT register
- *                        description in the Product Specification). The library
- *                        checks it with an assertion.
- * @param ext_trigger_en  True to disable immediate start.
  *
  * @retval NRF_ERROR_INTERNAL  Error during PPI channel configuration.
  * @retval NRF_SUCCESS         Buffer set for receiving.
  */
-ret_code_t nrf_libuarte_drv_rx_start(const nrf_libuarte_drv_t * const p_libuarte,
-                                     uint8_t * p_data, size_t len, uint8_t * pktbuf, size_t pktlen);
-
-/**
- * @brief Function for setting a buffer for data that will be later received in UARTE.
- *
- * @param p_libuarte  Pointer to libuarte instance.
- * @param p_data      Pointer to data.
- * @param len         Number of bytes to receive. Maximum possible length is
- *                    dependent on the used SoC (see the MAXCNT register
- *                    description in the Product Specification). The library
- *                    checks it with an assertion.
- */
-void nrf_libuarte_drv_rx_buf_rsp(const nrf_libuarte_drv_t * const p_libuarte,
-                                 uint8_t * p_data, size_t len);
+ret_code_t nrf_libuarte_drv_rx_start(const nrf_libuarte_drv_t * const p_libuarte);
 
 /**
  * @brief Function for stopping receiving data over UARTE.
@@ -317,8 +297,25 @@ void nrf_libuarte_drv_rx_stop(const nrf_libuarte_drv_t * const p_libuarte);
  */
 bool nrf_libuarte_drv_rx_enabled(const nrf_libuarte_drv_t * const p_libuarte);
 
-
+/**
+ * @brief Get the pointer to the libuarte packet status structure
+ *  i.e. number of chars, number of packets, errors etc
+ *
+ * @param  p_libuarte Pointer to libuarte instance.
+ * @retval df_packet_stats_t* - Pointer to the packet status structure
+ */
 df_packet_stats_t * get_packet_stats(const nrf_libuarte_drv_t * const p_libuarte);
+
+
+/**
+  * @brief Get the pointer to the libuarte packet control structure
+  *  i.e. current packet number of chars, checksum veracity etc
+  *
+ * @param  p_libuarte Pointer to libuarte instance.
+ * @retval df_packet_ctl_t* - Pointer to the packet control structure
+ */
+df_packet_ctl_t * get_packet_control(const nrf_libuarte_drv_t * const p_libuarte);
+
 
 /** @} */
 

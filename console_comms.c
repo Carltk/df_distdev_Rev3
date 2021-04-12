@@ -104,13 +104,17 @@ ret_code_t PortInit(nrf_uarte_baudrate_t baud)
         .baudrate = baud,                       ///< Baud rate.
         .irq_priority = APP_IRQ_PRIORITY_LOW,   ///< Interrupt priority.
         .pullup_rx = 1,                         ///< Pull up on RX pin.
+        .rx_in_buf.p_data = inbuf,  
+        .rx_in_buf.size = INBUF_SIZE,
+        .packet_buf.p_data = pkt_buf,
+        .packet_buf.size = PACKET_SIZE
     };
 
     ret = nrf_libuarte_drv_init(&intbus, &nrf_libuarte_drv_config, &comms_evt_handler, NULL);
     if (ret != NRFX_SUCCESS)
     {    NRFX_LOG_INFO("Serial init failure [%x]", ret);  }
     
-    ret = nrf_libuarte_drv_rx_start(&intbus, inbuf, INBUF_SIZE, pkt_buf, PACKET_SIZE);               // (re)enable the receiver    
+    ret = nrf_libuarte_drv_rx_start(&intbus);                       // (re)enable the receiver    
     if (ret != NRFX_SUCCESS)
     {    NRFX_LOG_INFO("Serial start failure [%x]", ret);  }
     
@@ -156,14 +160,9 @@ void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
         case NRF_LIBUARTE_DRV_EVT_GOT_PACKET:
             // handle reception of a qualified (D1 // D2) packet 
             get_msg_data(&msg_data, &con_comms);  
-            
-            nrf_libuarte_drv_rx_start(&intbus, inbuf, INBUF_SIZE, pkt_buf, PACKET_SIZE);               // (re)enable the receiver    
-
             break;
-
-        case NRF_LIBUARTE_DRV_EVT_DBG_FULL:
         case NRF_LIBUARTE_DRV_EVT_RX_DATA:    ///< Data received.
-
+            break;
                 c = *p_evt->data.rxtx.p_data;
                 con_comms.in_char_count += 1;
 
@@ -206,9 +205,9 @@ void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
                 }
 
             break;        
-        case NRF_LIBUARTE_DRV_EVT_RX_BUF_REQ: ///< Requesting new buffer for receiving data.
-            nrf_libuarte_drv_rx_buf_rsp(&intbus, inbuf, INBUF_SIZE);   
-            break;
+//        case NRF_LIBUARTE_DRV_EVT_RX_BUF_REQ: ///< Requesting new buffer for receiving data.
+            //nrf_libuarte_drv_rx_buf_rsp(&intbus, inbuf, INBUF_SIZE);   
+//            break;
         case NRF_LIBUARTE_DRV_EVT_TX_DONE:     ///< Requested TX transfer completed.
             //NRF_LOG_INFO("Comms: Tx done event");                                    
 
@@ -280,51 +279,49 @@ no_save:
 msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
 {
     msg_state_t retval = MSG_INCOMPLETE;
+    rd->packet_ctl = get_packet_control(&intbus);
 
-    if (rd->rx_state == RX_GOT_EOF)
-    {    
-        if (rd->rx_char_count >= MSG_MIN_SIZE)
-        {
-            md->msg_type = rd->rx_buf[RXBUF_TYPE];
+    if (rd->packet_ctl->packet_length >= MSG_MIN_SIZE)
+    {
+        md->msg_type = rd->rx_buf[RXBUF_TYPE];
 
-            if (isInCharArray(md->msg_type, ddpc.dev_type, NUM_DEV_TYPES))              // See if the message type matches one in my array of acceptable types
-            {   md->msg_addr = buf2int(&rd->rx_buf[RXBUF_ADDR]);              // grab the address from the message
+        if (isInCharArray(md->msg_type, ddpc.dev_type, NUM_DEV_TYPES))              // See if the message type matches one in my array of acceptable types
+        {   md->msg_addr = buf2int(&rd->rx_buf[RXBUF_ADDR]);              // grab the address from the message
 
-                if (md->msg_addr == DISCOVERY_DFLT_ADDR)                        // If it's the Adoption address
-                {   
-                    if (rd->comms_state < COMMS_ADOPTING)
-                    {    rd->comms_state = COMMS_ADOPTING;    }
+            if (md->msg_addr == DISCOVERY_DFLT_ADDR)                        // If it's the Adoption address
+            {   
+                if (rd->comms_state < COMMS_ADOPTING)
+                {    rd->comms_state = COMMS_ADOPTING;    }
 
-                    if (ddpc.nv_immediate.dev_address & 0xFF00)                 // and only if we haven't got a real (adopted) address
-                    {   NRF_LOG_INFO("Comms Discovery, Holdoff [%d]", rd->discovery_holdoff);                                  
-                        if (rd->rx_buf[RXBUF_COMMAND] == FD_CMD_DISCOVER)       // -> Only respond to Discovery commands
-                        {   
-                            rd->discovery_holdoff -= 1;                         // -> dec the holdoff counter
-                            if (!rd->discovery_holdoff)                         //   .. if we get to 0
-                            {   NRF_LOG_INFO("Got Comms Discovery, addr [%x:%x]. Cmd [%x]", md->msg_addr, ddpc.nv_immediate.dev_address, rd->rx_buf[RXBUF_COMMAND]);                                  
-                                md->msg_state = retval = MSG_COMPLETE;          //    -> answer the message
-                                rd->discovery_holdoff = ((ddpc.my_rnd >> 4) + 1);  // update the holdoff in case we have to go around again
-                                update_rng();                                   // and get a new random holdoff for next time
-                            }
-                            else
-                            {   md->msg_state = retval = MSG_DROPPED;   }       // Haven't reached the holdoff count .. drop the message
+                if (ddpc.nv_immediate.dev_address & 0xFF00)                 // and only if we haven't got a real (adopted) address
+                {   NRF_LOG_INFO("Comms Discovery, Holdoff [%d]", rd->discovery_holdoff);                                  
+                    if (rd->rx_buf[RXBUF_COMMAND] == FD_CMD_DISCOVER)       // -> Only respond to Discovery commands
+                    {   
+                        rd->discovery_holdoff -= 1;                         // -> dec the holdoff counter
+                        if (!rd->discovery_holdoff)                         //   .. if we get to 0
+                        {   NRF_LOG_INFO("Got Comms Discovery, addr [%x:%x]. Cmd [%x]", md->msg_addr, ddpc.nv_immediate.dev_address, rd->rx_buf[RXBUF_COMMAND]);                                  
+                            md->msg_state = retval = MSG_COMPLETE;          //    -> answer the message
+                            rd->discovery_holdoff = ((ddpc.my_rnd >> 4) + 1);  // update the holdoff in case we have to go around again
+                            update_rng();                                   // and get a new random holdoff for next time
                         }
                         else
-                        {   md->msg_state = retval = MSG_DROPPED;   }           // In discovery & not a discovery command .. drop the message
+                        {   md->msg_state = retval = MSG_DROPPED;   }       // Haven't reached the holdoff count .. drop the message
                     }
+                    else
+                    {   md->msg_state = retval = MSG_DROPPED;   }           // In discovery & not a discovery command .. drop the message
                 }
-                else if (md->msg_addr == ddpc.nv_immediate.dev_address)                      // See if it is my real address. This needs to be after Discovery to stop answering Polls in Discovery mode.
-                {   md->msg_state = retval = MSG_COMPLETE;  }               // -> continue to processing of the message
-                else if (md->msg_addr == ALL_CALL_ADDR)
-                {   md->msg_state = retval = MSG_COMPLETE;  }       // -> good Type & Address
-                else
-                {   md->msg_state = retval = MSG_BAD_ADDR;  }       // message for another device, output error message
             }
-            else            // Bad Type
-            {   md->msg_state = retval = MSG_BAD_TYPE;  }           // message for another device, output error message
+            else if (md->msg_addr == ddpc.nv_immediate.dev_address)                      // See if it is my real address. This needs to be after Discovery to stop answering Polls in Discovery mode.
+            {   md->msg_state = retval = MSG_COMPLETE;  }               // -> continue to processing of the message
+            else if (md->msg_addr == ALL_CALL_ADDR)
+            {   md->msg_state = retval = MSG_COMPLETE;  }       // -> good Type & Address
+            else
+            {   md->msg_state = retval = MSG_BAD_ADDR;  }       // message for another device, output error message
         }
-        // else  -- not enough chars
+        else            // Bad Type
+        {   md->msg_state = retval = MSG_BAD_TYPE;  }           // message for another device, output error message
     }
+
     
     if (retval > MSG_INCOMPLETE)
     {

@@ -87,6 +87,9 @@ typedef struct
     uint8_t  discovery_holdoff;     // a (randomised) counter to skip address discovery requests
     uint16_t discovery_temp_addr;   // In discovery mode, holds the new temp address until a succesful response is send (and the real address can be changed to this one)
     rx_state_t rx_state;            // Status of the Comms receiver
+
+    df_packet_ctl_t * packet_ctl;   // Control structure of the current packet
+
     uint8_t rx_char_count;
     uint8_t in_char_count;
     char * rx_buf;                   // Pointer to the Rx Buffer
