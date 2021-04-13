@@ -1656,24 +1656,64 @@
 // </h> 
 //==========================================================
 
+// <h> UART - UART Device
+
+//==========================================================
+
+// <q> NRFX_UART_ENABLED  - Enable system UARTS
+#ifndef NRFX_UART_ENABLED
+#define NRFX_UART_ENABLED 1
+#endif
+
+// <q> NRFX_UART0_ENABLED  - Enable system UART 0
+#ifndef NRFX_UART0_ENABLED
+#define NRFX_UART0_ENABLED 1
+#endif
+
+// <q> NRFX_UART1_ENABLED  - Enable system UART 1
+#ifndef NRFX_UART1_ENABLED
+#define NRFX_UART1_ENABLED 0
+#endif
+
+#ifndef NRFX_UART_DEFAULT_CONFIG_HWFC
+#define NRFX_UART_DEFAULT_CONFIG_HWFC 0
+#endif
+
+#ifndef NRFX_UART_DEFAULT_CONFIG_PARITY
+#define NRFX_UART_DEFAULT_CONFIG_PARITY 0
+#endif
+
+#ifndef NRFX_UART_DEFAULT_CONFIG_IRQ_PRIORITY
+#define NRFX_UART_DEFAULT_CONFIG_IRQ_PRIORITY 6
+#endif
+
+
+#ifndef NRFX_UART_DEFAULT_CONFIG_BAUDRATE
+#define NRFX_UART_DEFAULT_CONFIG_BAUDRATE NRF_UART_BAUDRATE_9600
+#endif
+
+
+
+// </h> 
+//==========================================================
+
 // <h> nrf_libuarte_drv - libUARTE library
 
 //==========================================================
 // <q> NRF_LIBUARTE_DRV_HWFC_ENABLED  - Enable HWFC support in the driver
- 
 
 #ifndef NRF_LIBUARTE_DRV_HWFC_ENABLED
 #define NRF_LIBUARTE_DRV_HWFC_ENABLED 0
 #endif
 
 // <q> NRF_LIBUARTE_DRV_UARTE0  - UARTE0 instance
-#ifndef NRF_LIBUARTE_DRV_UARTE0
-#define NRF_LIBUARTE_DRV_UARTE0 1
+#ifndef NRF_LIBUARTE_DRV_UART0
+#define NRF_LIBUARTE_DRV_UART0 1
 #endif
 
 // <q> NRF_LIBUARTE_DRV_UARTE1  - UARTE1 instance
-#ifndef NRF_LIBUARTE_DRV_UARTE1
-#define NRF_LIBUARTE_DRV_UARTE1 0
+#ifndef NRF_LIBUARTE_DRV_UART1
+#define NRF_LIBUARTE_DRV_UART1 1
 #endif
 
 // </h> 

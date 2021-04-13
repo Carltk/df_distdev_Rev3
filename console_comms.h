@@ -5,7 +5,7 @@
 #include "df_libuarte_drv.h"
 
 #define NUM_BAUD_RATES 5
-#define BAUD_LIST { NRF_UARTE_BAUDRATE_4800, NRF_UARTE_BAUDRATE_9600, NRF_UARTE_BAUDRATE_19200, NRF_UARTE_BAUDRATE_38400, NRF_UARTE_BAUDRATE_115200 }
+#define BAUD_LIST { NRF_UART_BAUDRATE_4800, NRF_UART_BAUDRATE_9600, NRF_UART_BAUDRATE_19200, NRF_UART_BAUDRATE_38400, NRF_UART_BAUDRATE_115200 }
 
 #define INBUF_SIZE      128
 #define PACKET_SIZE     128
@@ -61,7 +61,6 @@
     #define PUMP_CMD_ALL_LIGHTS_ON 0xFD	 // NoResp (32)
     #define PUMP_CMD_ALL_LIGHTS_OFF 0xFB // NoResp (32)
 
-
 typedef enum {
     COMMS_INIT = 0,                     // Comms starting
     COMMS_ERROR,                        // Comms errors
@@ -73,25 +72,13 @@ typedef enum {
     COMMS_ONLINE                        // Online, getting polling messages
 } comms_state_t;
 
-
-typedef enum {
-    RX_IS_IDLE = 0,
-    RX_GOT_SOH,
-    RX_GOT_STUFF,
-    RX_GOT_EOF
-} rx_state_t;
-
 typedef struct 
 {   comms_state_t comms_state;      // State of the connection to the Console
     uint8_t baud_index;             // Index of the baud rate into BAUD_LIST
     uint8_t  discovery_holdoff;     // a (randomised) counter to skip address discovery requests
     uint16_t discovery_temp_addr;   // In discovery mode, holds the new temp address until a succesful response is send (and the real address can be changed to this one)
-    rx_state_t rx_state;            // Status of the Comms receiver
 
     df_packet_ctl_t * packet_ctl;   // Control structure of the current packet
-
-    uint8_t rx_char_count;
-    uint8_t in_char_count;
     char * rx_buf;                   // Pointer to the Rx Buffer
     
     uint8_t tx_collision;          // Flag to show that there was a bus collision
@@ -115,8 +102,6 @@ extern char tx_buf[TX_BUF_SIZE];
     .discovery_holdoff = 0x04,                  \
     .discovery_temp_addr = DISCOVERY_DFLT_ADDR, \
     .rx_state = RX_IS_IDLE,                     \
-    .rx_char_count = 0,                         \
-    .in_char_count = 0,                         \
     .rx_buf = pkt_buf,                          \
     .tx_collision = 0,                          \
     .err_count = 0,                             \

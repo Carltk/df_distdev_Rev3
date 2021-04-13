@@ -202,4 +202,9 @@ void update_rng(void);
 */
 void df_gpio_cfg_output(uint32_t pin_number, uint32_t drive_type);
 
+/**
+* @brief get the system tick in milliseconds
+*/
+uint32_t get_sys_ms(void);
+
 #endif // DF_HARDWARE_INIT_H__

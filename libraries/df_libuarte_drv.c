@@ -44,10 +44,12 @@
  */
 #include "sdk_config.h"
 #include "df_libuarte_drv.h"
-#include "nrf_uarte.h"
+#include "nrfx_timer.h"
+// #include "nrfx_uart.h"
 #include "nrf_gpio.h"
 #include <nrfx_gpiote.h>
-#include <../src/prs/nrfx_prs.h>
+
+#include "../../df_distdev_DDPCP_Rev3/hardware_init.h"
 
 #define NRF_LOG_MODULE_NAME libUARTE
 #if NRF_LIBUARTE_CONFIG_LOG_ENABLED
@@ -60,30 +62,10 @@
 #include "nrf_log.h"
 NRF_LOG_MODULE_REGISTER();
 
-#define MAX_DMA_XFER_LEN    ((1UL << UARTE0_EASYDMA_MAXCNT_SIZE) - 1)
-
-
 #define INTERRUPTS_MASK  \
-    (NRF_UARTE_INT_ENDRX_MASK | NRF_UARTE_INT_RXSTARTED_MASK | NRF_UARTE_INT_ERROR_MASK | \
-     NRF_UARTE_INT_ENDTX_MASK | NRF_UARTE_INT_TXSTOPPED_MASK | NRF_UARTE_INT_RXDRDY_MASK)
-
-// ENDRX -> EasyDMA has finished accessing the Rx Buffer in RAM (Receive buffer is filled up)
-// RXDRDY -> Character received (but may not yet be in Data RAM) 
-
-static const nrf_libuarte_drv_t * m_libuarte_instance[2];
-
-/* if it is defined it means that PRS for uart is not used. */
-#ifdef nrfx_uarte_0_irq_handler
-#define libuarte_0_irq_handler UARTE0_UART0_IRQHandler
-#endif
-
-#if NRFX_CHECK(NRF_LIBUARTE_DRV_UARTE0)
-void libuarte_0_irq_handler(void);
-#endif
-
-#if NRFX_CHECK(NRF_LIBUARTE_DRV_UARTE1)
-void libuarte_1_irq_handler(void);
-#endif
+     NRF_UART_INT_MASK_RXDRDY | NRF_UART_INT_MASK_TXDRDY |  \
+     NRF_UART_INT_MASK_ERROR | NRF_UART_INT_MASK_RXTO)
+// Unused interrupts     NRF_UART_INT_MASK_CTS,  NRF_UART_INT_MASK_NCTS
 
 #if defined(NRF_LIBUARTE_DRV_HWFC_ENABLED)
 #define LIBUARTE_DRV_WITH_HWFC NRF_LIBUARTE_DRV_HWFC_ENABLED
@@ -92,6 +74,9 @@ void libuarte_1_irq_handler(void);
 #endif
 
 #define RTS_PIN_DISABLED 0xff
+
+static void clear_packet_control(const nrf_libuarte_drv_t * const p_libuarte);
+static void irq_handler(nrfx_uart_event_t const * p_event, void * p_context);
 
 /** @brief Macro executes given function on every allocated channel in the list between provided
  * indexes.
@@ -232,35 +217,28 @@ static ret_code_t ppi_configure(const nrf_libuarte_drv_t * const p_libuarte,
 
     for (int i = 0; i < NRF_LIBUARTE_DRV_PPI_GROUP_MAX; i++)
     {   p_libuarte->ctrl_blk->ppi_groups[i] = (nrf_ppi_channel_group_t)PPI_GROUP_NUM;  }       /* set to invalid value */
-    
-    if (MAX_DMA_XFER_LEN < UINT16_MAX)
-    {   // PPI -> Link Uarte EndTX Event with Uarte StartTx Task 
-        ret = ppi_channel_configure(
-                &p_libuarte->ctrl_blk->ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_ENDTX_STARTTX],
-                nrf_uarte_event_address_get(p_libuarte->uarte, NRF_UARTE_EVENT_ENDTX),
-                nrf_uarte_task_address_get(p_libuarte->uarte, NRF_UARTE_TASK_STARTTX),
-                0);
-        if (ret != NRF_SUCCESS)
-        {   goto complete_config;   }
-    }
 
     // PPI -> Link Uarte RxdRdy (char Rxd) Event with Timer Count Task and move total to DF_COUNT_CHAN_RXD_CHARS capture channel
+
+/*
     ret = ppi_channel_configure(
             &p_libuarte->ctrl_blk->ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_RXRDY_TIMER_COUNT],
-            nrf_uarte_event_address_get(p_libuarte->uarte, NRF_UARTE_EVENT_RXDRDY),
-            nrfx_timer_task_address_get(&p_libuarte->timer, NRF_TIMER_TASK_COUNT),
-            nrfx_timer_capture_task_address_get(&p_libuarte->timer, DF_COUNT_CHAN_RXD_CHARS));
+            nrf_uart_event_address_get(p_libuarte->uart, NRF_UART_EVENT_RXDRDY),
+            nrfx_timer_task_address_get(p_libuarte->timer, NRF_TIMER_TASK_COUNT),
+            nrfx_timer_capture_task_address_get(p_libuarte->timer, DF_COUNT_CHAN_RXD_CHARS));
     if (ret != NRF_SUCCESS)
     {   goto complete_config;    }
 
-    // PPI -> Link Uarte EndRx (buffer full) Event with Uarte StartRx Task and Fork to move timer Count into Capture/Compare channel 0
+*/
+/*    // PPI -> Link Uarte EndRx (buffer full) Event with Uarte StartRx Task and Fork to move timer Count into Capture/Compare channel 0
     ret = ppi_channel_configure(
             &p_libuarte->ctrl_blk->ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_ENDRX_STARTRX],
-            nrf_uarte_event_address_get(p_libuarte->uarte, NRF_UARTE_EVENT_ENDRX),
-            nrf_uarte_task_address_get(p_libuarte->uarte, NRF_UARTE_TASK_STARTRX),
+            nrf_uarte_event_address_get(p_libuarte->uart, NRF_UARTE_EVENT_ENDRX),
+            nrf_uarte_task_address_get(p_libuarte->uart, NRF_UARTE_TASK_STARTRX),
             nrfx_timer_capture_task_address_get(&p_libuarte->timer, DF_COUNT_CHAN_RXD_TOTAL));
     if (ret != NRF_SUCCESS)
     {   goto complete_config;   }
+*/
 
 complete_config:
     if (ret == NRF_SUCCESS)
@@ -270,6 +248,9 @@ complete_config:
 
     return ret;
 }
+
+// Tasks - NRF_UART_TASK_STARTRX, NRF_UART_TASK_STOPRX, NRF_UART_TASK_STARTTX, NRF_UART_TASK_STOPTX, NRF_UART_TASK_SUSPEND
+// Events - NRF_UART_EVENT_CTS, NRF_UART_EVENT_NCTS, NRF_UART_EVENT_RXDRDY, NRF_UART_EVENT_TXDRDY,NRF_UART_EVENT_ERROR, NRF_UART_EVENT_RXTO  
 
 void tmr_evt_handler(nrf_timer_event_t event_type, void * p_context)
 {   UNUSED_PARAMETER(event_type);
@@ -282,7 +263,6 @@ ret_code_t nrf_libuarte_drv_init(const nrf_libuarte_drv_t * const p_libuarte,
                              void * p_context)
 {
     ret_code_t ret;
-    IRQn_Type irqn = nrfx_get_irq_number(p_libuarte->uarte);
 
     if (p_libuarte->ctrl_blk->enabled)
     {   return NRF_ERROR_INVALID_STATE;     }
@@ -291,39 +271,27 @@ ret_code_t nrf_libuarte_drv_init(const nrf_libuarte_drv_t * const p_libuarte,
     memcpy(&p_libuarte->ctrl_blk->rx_in_buf, &p_config->rx_in_buf, sizeof(nrf_libuarte_drv_data_t));
     memcpy(&p_libuarte->ctrl_blk->packet_buf, &p_config->packet_buf, sizeof(nrf_libuarte_drv_data_t));
     p_libuarte->ctrl_blk->tx_out_buf.p_data = NULL;
-    p_libuarte->ctrl_blk->p_context = p_context;
-
-    m_libuarte_instance[p_libuarte->uarte == NRF_UARTE0 ? 0 : 1] = p_libuarte;
+    p_libuarte->ctrl_blk->p_context = p_libuarte->ctrl_blk;
 
     //UART init
-    nrf_gpio_pin_set(p_config->tx_pin);
-    nrf_gpio_cfg_output(p_config->tx_pin);
-    nrf_gpio_cfg_input(p_config->rx_pin, p_config->pullup_rx ?
-                        NRF_GPIO_PIN_PULLUP : NRF_GPIO_PIN_NOPULL);
-    nrf_uarte_baudrate_set(p_libuarte->uarte, p_config->baudrate);
-    nrf_uarte_configure(p_libuarte->uarte, p_config->parity, NRF_UARTE_HWFC_DISABLED);
-    nrf_uarte_txrx_pins_set(p_libuarte->uarte, p_config->tx_pin, p_config->rx_pin);
+    nrfx_uart_config_t uc = NRFX_UART_DEFAULT_CONFIG;
+    uc.pseltxd = p_config->tx_pin;
+    uc.pselrxd = p_config->rx_pin;
+    uc.p_context = p_libuarte;
+    uc.baudrate = p_config->baudrate;
+    
+    ret = nrfx_uart_init(p_libuarte->uart, &uc, irq_handler);
 
-#if NRFX_CHECK(NRFX_PRS_ENABLED) && NRFX_CHECK(NRF_LIBUARTE_DRV_UARTE0)
-    if (irqn == UARTE0_UART0_IRQn)
-    {
-        if (nrfx_prs_acquire(p_libuarte->uarte, libuarte_0_irq_handler) != NRFX_SUCCESS)
-        {   return NRF_ERROR_BUSY;        }
-    }
-#endif // NRFX_CHECK(NRFX_PRS_ENABLED) && NRFX_CHECK(NRF_LIBUARTE_DRV_UARTE0)
+//    NVIC_SetPriority(irqn, p_config->irq_priority);
+//    NVIC_ClearPendingIRQ(irqn);
+//    NVIC_EnableIRQ(irqn);
 
-    nrf_uarte_int_enable(p_libuarte->uarte, INTERRUPTS_MASK);
-
-    NVIC_SetPriority(irqn, p_config->irq_priority);
-    NVIC_ClearPendingIRQ(irqn);
-    NVIC_EnableIRQ(irqn);
-
-    nrf_uarte_enable(p_libuarte->uarte);
+    nrfx_uart_rx_enable(p_libuarte->uart);
 
     nrfx_timer_config_t tmr_config = NRFX_TIMER_DEFAULT_CONFIG;
     tmr_config.mode = NRF_TIMER_MODE_COUNTER;
     tmr_config.bit_width = NRF_TIMER_BIT_WIDTH_32;
-    ret = nrfx_timer_init(&p_libuarte->timer, &tmr_config, tmr_evt_handler);
+    ret = nrfx_timer_init(p_libuarte->timer, &tmr_config, tmr_evt_handler);
     if (ret != NRFX_SUCCESS)
     {   return NRF_ERROR_INTERNAL;     }
 
@@ -337,54 +305,32 @@ ret_code_t nrf_libuarte_drv_init(const nrf_libuarte_drv_t * const p_libuarte,
 
 void nrf_libuarte_drv_uninit(const nrf_libuarte_drv_t * const p_libuarte)
 {
-    IRQn_Type irqn = nrfx_get_irq_number(p_libuarte->uarte);
+    IRQn_Type irqn = nrfx_get_irq_number(p_libuarte->uart);
 
     if (p_libuarte->ctrl_blk->enabled == false)
     {   return;     }
 
     p_libuarte->ctrl_blk->enabled = false;
 
-    NVIC_DisableIRQ(irqn);
+    //NVIC_DisableIRQ(irqn);
 
     rx_ppi_disable(p_libuarte);
     tx_ppi_disable(p_libuarte);
 
-    nrf_uarte_int_disable(p_libuarte->uarte, 0xFFFFFFFF);
-    nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_TXSTOPPED);
-    nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_RXTO);
-
-    nrf_uarte_task_trigger(p_libuarte->uarte, NRF_UARTE_TASK_STOPTX);
-    nrf_uarte_task_trigger(p_libuarte->uarte, NRF_UARTE_TASK_STOPRX);
-
-    while ( (p_libuarte->ctrl_blk->tx_out_buf.p_data && !nrf_uarte_event_check(p_libuarte->uarte, NRF_UARTE_EVENT_TXSTOPPED)) 
-            || (!nrf_uarte_event_check(p_libuarte->uarte, NRF_UARTE_EVENT_RXTO)))
-    {}
+    nrfx_uart_uninit(p_libuarte->uart);
  
     p_libuarte->ctrl_blk->tx_out_buf.p_data = NULL;
 
-    nrf_uarte_disable(p_libuarte->uarte);
-
-    nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_TXSTARTED);
-    nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_TXSTOPPED);
-    nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_ENDTX);
-    nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_ENDRX);
-    nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_RXSTARTED);
-    nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_RXTO);
-
-#if NRFX_CHECK(NRFX_PRS_ENABLED) && NRFX_CHECK(NRF_LIBUARTE_DRV_UARTE0)
-    if (irqn == UARTE0_UART0_IRQn)
-    {   nrfx_prs_release(p_libuarte->uarte);       }
-#endif // NRFX_CHECK(NRFX_PRS_ENABLED) && NRFX_CHECK(NRF_LIBUARTE_DRV_UARTE0)
-
-    nrfx_timer_disable(&p_libuarte->timer);
-    nrfx_timer_uninit(&p_libuarte->timer);
+    nrfx_timer_disable(p_libuarte->timer);
+    nrfx_timer_uninit(p_libuarte->timer);
 
     ppi_free(p_libuarte);
 }
 
 ret_code_t nrf_libuarte_drv_tx(const nrf_libuarte_drv_t * const p_libuarte,
                                uint8_t * p_data, size_t len)
-{
+{   ret_code_t ret = NRFX_SUCCESS;
+    
     if (p_libuarte->ctrl_blk->tx_out_buf.p_data)
     {   return NRF_ERROR_BUSY;      }
 
@@ -393,49 +339,45 @@ ret_code_t nrf_libuarte_drv_tx(const nrf_libuarte_drv_t * const p_libuarte,
     p_libuarte->ctrl_blk->tx_cur_idx = 0;
 
     NRF_LOG_WARNING("Started TX total length:%d", len);
-    nrf_uarte_tx_buffer_set(p_libuarte->uarte, p_data, len);
-    nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_TXSTARTED);
-    nrf_uarte_task_trigger(p_libuarte->uarte, NRF_UARTE_TASK_STARTTX);
+    ret = nrfx_uart_tx(p_libuarte->uart, p_data, len);
 
-    return NRF_SUCCESS;
+    return(ret);
 }
 
 ret_code_t nrf_libuarte_drv_rx_start(const nrf_libuarte_drv_t * const p_libuarte)
 {
     /* Reset byte counting */
-    memset(&p_libuarte->ctrl_blk->packet_ctl, 0x00, sizeof(df_packet_ctl_t));
-    //!!Don't reset packet stats .. memset(&p_libuarte->ctrl_blk->packet_stats, 0x00, sizeof(df_packet_stats_t));     
+    clear_packet_control(p_libuarte);
 
-    if (!nrfx_timer_is_enabled(&p_libuarte->timer))
-    {   nrfx_timer_enable(&p_libuarte->timer);  }
+    if (!nrfx_timer_is_enabled(p_libuarte->timer))
+    {   nrfx_timer_enable(p_libuarte->timer);  }
     
-    nrfx_timer_clear(&p_libuarte->timer);
-
-    nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_ENDRX);
-    nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_RXSTARTED);
-
+    nrfx_timer_clear(p_libuarte->timer);
     rx_ppi_enable(p_libuarte);
 
-    nrf_uarte_task_trigger(p_libuarte->uarte, NRF_UARTE_TASK_STARTRX);
-    nrf_uarte_rx_buffer_set(p_libuarte->uarte, p_libuarte->ctrl_blk->rx_in_buf.p_data, p_libuarte->ctrl_blk->rx_in_buf.size);
+    nrfx_uart_rx_enable(p_libuarte->uart);
 
     return NRF_SUCCESS;
 }
 
 void nrf_libuarte_drv_rx_stop(const nrf_libuarte_drv_t * const p_libuarte)
-{
-    rx_ppi_disable(p_libuarte);
-
+{   rx_ppi_disable(p_libuarte);
     NRF_LOG_DEBUG("Stopping Rx.");
-    nrf_uarte_task_trigger(p_libuarte->uarte, NRF_UARTE_TASK_STOPRX);
-    nrfx_timer_disable(&p_libuarte->timer);
+    nrfx_uart_rx_disable(p_libuarte->uart);
+    nrfx_timer_disable(p_libuarte->timer);
 }
 
 df_packet_stats_t * get_packet_stats(const nrf_libuarte_drv_t * const p_libuarte)
 {   return(&p_libuarte->ctrl_blk->packet_stats);    }
 
+void clear_packet_stats(const nrf_libuarte_drv_t * const p_libuarte)
+{   memset(&p_libuarte->ctrl_blk->packet_stats, 0x00, sizeof(df_packet_stats_t));   }
+
 df_packet_ctl_t * get_packet_control(const nrf_libuarte_drv_t * const p_libuarte)
 {   return(&p_libuarte->ctrl_blk->packet_ctl);      }
+
+static void clear_packet_control(const nrf_libuarte_drv_t * const p_libuarte)
+{   memset(&p_libuarte->ctrl_blk->packet_ctl, 0x00, sizeof(df_packet_ctl_t));   }
 
 
 static uint8_t make_lrc(char *buf, uint8_t cnt)
@@ -469,164 +411,129 @@ static bool is_checksum_ok(char * buf, uint8_t len)
     return(retval);
 }
 
-static void irq_handler(const nrf_libuarte_drv_t * const p_libuarte)
+
+static void irq_handler(nrfx_uart_event_t const * p_event, void * p_context)
 {
-    // *** Uarte error received ***
-    if (nrf_uarte_event_check(p_libuarte->uarte, NRF_UARTE_EVENT_ERROR))
-    {   nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_ERROR);
+    nrf_libuarte_drv_t * ctxt = p_context;
+    nrf_libuarte_drv_ctrl_blk_t * cb = ctxt->ctrl_blk;
+
+    switch (p_event->type)
+    {
+        case NRFX_UART_EVT_TX_DONE:         // Tx finished 
+                // Do I need to move char by char into the TxBuf or is that handled already?
+               cb->tx_out_buf.p_data = NULL;
         
-        p_libuarte->ctrl_blk->packet_stats.err_cnt += 1;
+               nrf_libuarte_drv_evt_t evt = {.type = NRF_LIBUARTE_DRV_EVT_TX_DONE, .data = {.rxtx = {.p_data = cb->tx_out_buf.p_data, .size = cb->tx_out_buf.size } } };
+               cb->evt_handler(cb, &evt);
 
-        nrf_libuarte_drv_evt_t evt = 
-                {.type = NRF_LIBUARTE_DRV_EVT_ERROR, .data = 
-                                                   { .errorsrc = nrf_uarte_errorsrc_get_and_clear(p_libuarte->uarte) }};
-        p_libuarte->ctrl_blk->evt_handler(p_libuarte->ctrl_blk->p_context, &evt);
-    }
-
-    // *** Uarte character received ***
-    if (nrf_uarte_event_check(p_libuarte->uarte, NRF_UARTE_EVENT_RXDRDY))
-    {   nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_RXDRDY);
-
-        bool send_event = false;
-
-        p_libuarte->ctrl_blk->packet_stats.total_chars += 1;
-
-        p_libuarte->ctrl_blk->packet_ctl.curr_locn = nrfx_timer_capture_get(&p_libuarte->timer, DF_COUNT_CHAN_RXD_CHARS);           // get the count from the timer
-        uint8_t char_in = *(char *)(p_libuarte->ctrl_blk->rx_in_buf.p_data + p_libuarte->ctrl_blk->packet_ctl.curr_locn - 1);       // get this byte from the rx buffer
-
-        if (p_libuarte->ctrl_blk->packet_ctl.got_SOH)
-        {   
-            nrf_libuarte_drv_evt_t evt;
-            
-            if (char_in == EOF_CHAR)   // packet finished .. bundle packet up to application layer
-            {   p_libuarte->ctrl_blk->packet_stats.EOF_cnt += 1;
-                p_libuarte->ctrl_blk->packet_stats.total_packets += 1;
-                
-                p_libuarte->ctrl_blk->packet_ctl.checksum_ok = false;
-                p_libuarte->ctrl_blk->packet_ctl.packet_length = (p_libuarte->ctrl_blk->packet_ctl.curr_locn - p_libuarte->ctrl_blk->packet_ctl.SOH_locn + 1);
-
-                if (is_checksum_ok((p_libuarte->ctrl_blk->rx_in_buf.p_data + p_libuarte->ctrl_blk->packet_ctl.SOH_locn - 1), p_libuarte->ctrl_blk->packet_length))
-                {   p_libuarte->ctrl_blk->packet_stats.good_packets += 1;
-                    p_libuarte->ctrl_blk->packet_ctl.checksum_ok = true;
-                
-                    
-                    memcpy(p_libuarte->ctrl_blk->packet_buf.p_data, 
-                            (p_libuarte->ctrl_blk->rx_in_buf.p_data + p_libuarte->ctrl_blk->packet_ctl.SOH_locn - 1), 
-                            p_libuarte->ctrl_blk->packet_ctl.packet_length);       // move the packet into the packet buffer
-
-                    
+/*
+                //size_t amount = nrf_uart_tx_amount_get(ctxt->uart);
+                NRF_LOG_DEBUG("(evt) TX completed (%d)", amount);
+                cb->tx_cur_idx += amount;
+                if (cb->tx_cur_idx >= cb->tx_out_buf.size)
+                {   
+                    nrf_uarte_event_clear(ctxt->uart, NRF_UARTE_EVENT_TXSTOPPED);
+                    nrf_uarte_task_trigger(ctxt->uart, NRF_UARTE_TASK_STOPTX);
                 }
-
-                if (p_libuarte->ctrl_blk->packet_ctl.curr_locn > (p_libuarte->ctrl_blk->rx_in_buf.size >> 1))       // Check if the inbuf is greater than 50% full
-                {   nrf_libuarte_drv_rx_stop(p_libuarte);    
-
-                    NRF_LOG_INFO("Libuarte: Stop Rx (EOF & 50\%) ");                
-                }                  // restart Rx to reload the buffer
+                else
+                {   // size_t rem_len = (cb->tx_out_buf.size - cb->tx_cur_idx);
+                    tx_ppi_disable(ctxt);     
+                }
+*/
             
-                NRF_LOG_INFO("Libuarte: Sending Packet (%d chars)", p_libuarte->ctrl_blk->packet_ctl.packet_length);
+            break;
+        case NRFX_UART_EVT_RX_DONE:
+            cb->packet_stats.total_chars += 1;
 
-                evt.type = NRF_LIBUARTE_DRV_EVT_GOT_PACKET;     // set the event type (i.e. Got a packet)
-                p_libuarte->ctrl_blk->evt_handler(p_libuarte->ctrl_blk->p_context, &evt);     // pass interrupt up to application layer
+            //cb->packet_ctl.curr_locn = nrfx_timer_capture_get(&ctxt->timer, DF_COUNT_CHAN_RXD_CHARS);           // get the count from the timer
+            uint8_t char_in = *(char *)(cb->rx_in_buf.p_data + cb->packet_ctl.curr_locn - 1);       // get this byte from the rx buffer
+
+            if (cb->packet_ctl.got_SOH)
+            {   
+                nrf_libuarte_drv_evt_t evt;
+            
+                if (char_in == EOF_CHAR)   // packet finished .. bundle packet up to application layer
+                {   cb->packet_stats.EOF_cnt += 1;
+                    cb->packet_stats.total_packets += 1;
+                
+                    cb->packet_ctl.packet_length = (cb->packet_ctl.curr_locn - cb->packet_ctl.SOH_locn + 1);
+
+                    NRF_LOG_INFO("%ld - libuarte: got EOF", get_sys_ms());
+    
+                    if (cb->packet_ctl.got_stuff)                         // if there is STUFF_CHAR(s) then we need to cobert the buffer on the way across
+                    {   uint8_t pktidx = 0;                                                 // a write-index to the packet buffer
+                        uint8_t inofst = (cb->packet_ctl.SOH_locn - 1);   // offset to the start of incomming data
+
+                        for (uint8_t i=1;i<=cb->packet_ctl.packet_length;i++)     // loop around the received buffer
+                        {   
+                            if (cb->rx_in_buf.p_data[inofst+i] == STUFF_CHAR)     // got a stuff char
+                            {   i += 1;     // go to the next char (i.e. skip the STUFF_CHAR)
+                                cb->packet_buf.p_data[pktidx] = (cb->rx_in_buf.p_data[inofst+i] | 0x80);
+                            }
+                            else
+                            {   cb->packet_buf.p_data[pktidx] = cb->rx_in_buf.p_data[inofst+i]; }
+                        
+                            pktidx += 1;            // inc the packetbuf index
+                        }
+                        cb->packet_ctl.packet_length = pktidx;        // reset the packet length to the new size (without STUFF_CHARs)
+                    }
+                    else        // no stuff chars .. just use a memcpy to move the packet into the packet buffer
+                    {   memcpy(cb->packet_buf.p_data, (cb->rx_in_buf.p_data + cb->packet_ctl.SOH_locn - 1), cb->packet_ctl.packet_length);   }    
+
+                    if (is_checksum_ok(cb->packet_buf.p_data, cb->packet_ctl.packet_length))
+                    {   cb->packet_stats.good_packets += 1;
+                        cb->packet_ctl.checksum_ok = true;
+                    }
+
+                    // Check if the inbuf is greater than 50% full
+                    //if (cb->packet_ctl.curr_locn > (cb->rx_in_buf.size >> 1))       
+                    //{   nrf_libuarte_drv_rx_stop(ctxt);    }          // stop/restart Rx to reload the buffer
+            
+                   // Send the GOT_PACKET event up to the application
+                    evt.type = NRF_LIBUARTE_DRV_EVT_GOT_PACKET;     // set the event type (i.e. Got a packet)
+                    cb->evt_handler(cb, &evt);     // pass interrupt up to application layer
+
+                    cb->packet_ctl.got_SOH = false;       // quick reset to state just by saying there is no SOH .. routine will start again
+                }
+                else if (char_in == STUFF_CHAR)
+                {   cb->packet_ctl.got_stuff = true;    }
+                else if (char_in == SOH_CHAR)        // another SOH .. reset and start again
+                {   cb->packet_ctl.got_SOH = true;
+                    cb->packet_ctl.got_stuff = false;
+                    cb->packet_ctl.checksum_ok = false;
+                    cb->packet_ctl.SOH_locn = cb->packet_ctl.curr_locn;
+                    cb->packet_stats.SOH_cnt += 1;
+                }
+                // else - nothing to do .. uarte automatically saves characters
             }
-            else if (char_in == SOH_CHAR)        // another SOH .. reset and start again
-            {   p_libuarte->ctrl_blk->packet_ctl.got_SOH = true;
-                p_libuarte->ctrl_blk->packet_ctl.SOH_locn = p_libuarte->ctrl_blk->packet_ctl.curr_locn;
-                p_libuarte->ctrl_blk->packet_stats.SOH_cnt += 1;
+            else
+            {   if (char_in == SOH_CHAR)  
+                {   cb->packet_ctl.got_SOH = true;
+                    cb->packet_ctl.SOH_locn = cb->packet_ctl.curr_locn;
+                    cb->packet_stats.SOH_cnt += 1;
+                    NRF_LOG_INFO("%ld - libuarte: got SOH", get_sys_ms());
+                }
             }
-            // else - nothing to do .. uarte automatically saves characters
-        }
-        else
-        {   if (char_in == SOH_CHAR)
-            {   p_libuarte->ctrl_blk->packet_ctl.got_SOH = true;
-                p_libuarte->ctrl_blk->packet_ctl.SOH_locn = p_libuarte->ctrl_blk->packet_ctl.curr_locn;
-                p_libuarte->ctrl_blk->packet_stats.SOH_cnt += 1;
-            }
-        }
 
-        if (p_libuarte->ctrl_blk->packet_ctl.curr_locn > (p_libuarte->ctrl_blk->rx_in_buf.size - 20))       // Check if the inbuf is greater than 20 short of the size
-        {   nrf_libuarte_drv_rx_stop(p_libuarte);    
+            if (cb->packet_ctl.curr_locn > (cb->rx_in_buf.size - 20))       // Check if the inbuf is greater than 20 short of the size
+            {   // nrf_libuarte_drv_rx_stop(ctxt);    
+                NRF_LOG_INFO("Libuarte: Stop Rx (> size-20)");                        
+            } 
+            break;
+        case NRFX_UART_EVT_ERROR:
+            cb->packet_stats.err_cnt += 1;
 
+            nrf_libuarte_drv_evt_t err_evt = 
+                    {.type = NRF_LIBUARTE_DRV_EVT_ERROR, 
+                     .data = { .errorsrc = nrf_uart_errorsrc_get_and_clear(ctxt->uart) }};
+            cb->evt_handler(&cb, &err_evt);
 
-
-            NRF_LOG_INFO("Libuarte: Stop Rx (> size-20)");                        
-        }                  // restart Rx to reload the buffer
+            break;
+        default:
+            break;
     }
 
-    // *** Rx Started ***
-    if (nrf_uarte_event_check(p_libuarte->uarte, NRF_UARTE_EVENT_RXSTARTED))
-    {   nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_RXSTARTED);
-
-        
-
-/*      nrf_libuarte_drv_evt_t evt = {.type = NRF_LIBUARTE_DRV_EVT_RX_BUF_REQ};
-        p_libuarte->ctrl_blk->evt_handler(p_libuarte->ctrl_blk->p_context, &evt);
-*/
-    }
-
-    // *** Rx End (InBuf is full or NRF_UARTE_TASK_STOPRX task sent)  
-    if (nrf_uarte_event_check(p_libuarte->uarte, NRF_UARTE_EVENT_ENDRX))
-    {   nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_ENDRX);
-
-        nrf_libuarte_drv_rx_start(p_libuarte);
-        //NRF_LOG_INFO("Libuarte: Rx ended");                        
 
 
-        // check to see if the buffer is overfull (log and send overflow error)
-        // need to get the size from the counter
-
-/*                nrf_libuarte_drv_evt_t err_evt = {
-                    .type = NRF_LIBUARTE_DRV_EVT_OVERRUN_ERROR,
-                    .data = {.overrun_err = {.overrun_length = chunk1}}};
-
-                p_libuarte->ctrl_blk->evt_handler(p_libuarte->ctrl_blk->p_context, &err_evt);
-*/
-
-        // AND just retart with the inbuf .. no more need to send 
-
-    }
-
-    // *** Tx Stopped ***
-    if (nrf_uarte_event_check(p_libuarte->uarte, NRF_UARTE_EVENT_TXSTOPPED))
-    {   nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_TXSTOPPED);
-        
-        nrf_libuarte_drv_evt_t evt = {
-           .type = NRF_LIBUARTE_DRV_EVT_TX_DONE,
-           .data = {.rxtx = {.p_data = p_libuarte->ctrl_blk->tx_out_buf.p_data,
-                             .size = p_libuarte->ctrl_blk->tx_out_buf.size } } };
-       p_libuarte->ctrl_blk->tx_out_buf.p_data = NULL;
-       p_libuarte->ctrl_blk->evt_handler(p_libuarte->ctrl_blk->p_context, &evt);
-    }
-
-    // *** End Tx ***
-    if (nrf_uarte_event_check(p_libuarte->uarte, NRF_UARTE_EVENT_ENDTX))
-    {   nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_ENDTX);
-        
-        size_t amount = nrf_uarte_tx_amount_get(p_libuarte->uarte);
-
-        NRF_LOG_DEBUG("(evt) TX completed (%d)", amount);
-        p_libuarte->ctrl_blk->tx_cur_idx += amount;
-        if (p_libuarte->ctrl_blk->tx_cur_idx >= p_libuarte->ctrl_blk->tx_out_buf.size)
-        {
-            nrf_uarte_event_clear(p_libuarte->uarte, NRF_UARTE_EVENT_TXSTOPPED);
-            nrf_uarte_task_trigger(p_libuarte->uarte, NRF_UARTE_TASK_STOPTX);
-        }
-        else
-        {   // size_t rem_len = (p_libuarte->ctrl_blk->tx_out_buf.size - p_libuarte->ctrl_blk->tx_cur_idx);
-            tx_ppi_disable(p_libuarte);     
-        }
-    }
 }
 
-#if NRF_LIBUARTE_DRV_UARTE0
-void libuarte_0_irq_handler(void)
-{
-    irq_handler(m_libuarte_instance[0]);
-}
-#endif
-
-#if NRF_LIBUARTE_DRV_UARTE1
-void UARTE1_IRQHandler(void)
-{
-    irq_handler(m_libuarte_instance[1]);
-}
-#endif

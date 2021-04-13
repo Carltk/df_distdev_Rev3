@@ -46,7 +46,7 @@
 #define DF_LIBUARTE_DRV_H
 
 #include "sdk_errors.h"
-#include "nrf_uarte.h"
+#include "nrfx_uart.h"
 #include "nrfx_ppi.h"
 #include "nrfx_timer.h"
 #include <stdint.h>
@@ -56,7 +56,7 @@
  * @defgroup nrf_libuarte_drv libUARTE driver
  * @ingroup app_common
  *
- * @brief Module for reliable communication over UARTE.
+ * @brief Module for reliable communication over UART.
  *
  * @{
  */
@@ -71,31 +71,26 @@
 #define MSG_MIN_SIZE    5
 #define START_LRC_CALC  1  
 
-typedef enum
-{   DF_COUNT_CHAN_RXD_CHARS = 0,
+typedef enum                            // Usage of counter-compare Channels in the Timer/Counter
+{   DF_COUNT_CHAN_RXD_CHARS = 0,        
     DF_COUNT_CHAN_RXD_TOTAL,
     //DF_COUNT_CHAN_CHARS_AT_RTS,
     //DF_COUNT_CHAN_UNUSED
-} df_count_chan_t;
-
+} df_timer_chan_t;
 
 typedef enum
-{
-    NRF_LIBUARTE_DRV_EVT_RX_DATA,       ///< Data received.
-    //NRF_LIBUARTE_DRV_EVT_RX_BUF_REQ,    ///< Requesting new buffer for receiving data.
+{   NRF_LIBUARTE_DRV_EVT_RX_DATA,       ///< Data received.
     NRF_LIBUARTE_DRV_EVT_TX_DONE,       ///< Requested TX transfer completed.
     NRF_LIBUARTE_DRV_EVT_ERROR,         ///< Error reported by the UARTE peripheral.
     NRF_LIBUARTE_DRV_EVT_OVERRUN_ERROR, ///< Error reported by the driver.
     NRF_LIBUARTE_DRV_EVT_GOT_PACKET,    ///< Have received a datafuel Console comms packet
-    NRF_LIBUARTE_DRV_EVT_ERR_PACKET     ///< Have received a datafuel Console comms packet with error(s)
 } nrf_libuarte_drv_evt_type_t;
 
 /**
  * @brief PPI channels used by libuarte
  */
 typedef enum
-{
-    NRF_LIBUARTE_DRV_PPI_CH_EXT_TRIGGER_STARTRX_EN_ENDRX_STARTX,
+{   NRF_LIBUARTE_DRV_PPI_CH_EXT_TRIGGER_STARTRX_EN_ENDRX_STARTX,
     NRF_LIBUARTE_DRV_PPI_CH_RXSTARTED_EXT_TSK,
     NRF_LIBUARTE_DRV_PPI_CH_EXT_STOP_STOPRX,
     NRF_LIBUARTE_DRV_PPI_CH_EXT_STOP_GROUPS_EN,
@@ -116,27 +111,24 @@ typedef enum
 /**
  * @brief PPI groups used by libuarte
  */
-typedef enum
-{
-    NRF_LIBUARTE_DRV_PPI_GROUP_ENDRX_STARTRX, ///< Group used for controlling PPI connection between ENDRX and STARTRX
-    NRF_LIBUARTE_DRV_PPI_GROUP_ENDRX_EXT_RXDONE_TSK, ///< Group used for controlling PPI connection between ENDRX and RXDONE
+typedef enum {   
+    NRF_LIBUARTE_DRV_PPI_GROUP_ENDRX_STARTRX,           ///< Group used for controlling PPI connection between ENDRX and STARTRX
+    NRF_LIBUARTE_DRV_PPI_GROUP_ENDRX_EXT_RXDONE_TSK,    ///< Group used for controlling PPI connection between ENDRX and RXDONE
     NRF_LIBUARTE_DRV_PPI_GROUP_MAX
 } nrf_libuarte_drv_ppi_group_t;
 
-typedef struct
-{
+typedef struct {         // generic data structure (pointer to data and size)
     uint8_t  * p_data;  ///< Pointer to the data to be sent or received.
     size_t     size;    ///< Size of the data buffer
 } nrf_libuarte_drv_data_t;
 
-typedef struct
-{
+typedef struct  {   
     uint32_t overrun_length;
 } nrf_libuarte_drv_overrun_err_evt_t;
 
-typedef struct
-{
+typedef struct  {   
     nrf_libuarte_drv_evt_type_t type; ///< Event type.
+    
     union {
         nrf_libuarte_drv_data_t rxtx;     ///< Data provided for transfer completion events.
         uint8_t                 errorsrc; ///< Error source flags.
@@ -149,21 +141,19 @@ typedef struct {
     uint32_t             rx_pin;        ///< RXD pin number.
     uint32_t             cts_pin;       ///< CTS pin number.
     uint32_t             rts_pin;       ///< RTS pin number.
-    nrf_uarte_parity_t   parity;        ///< Parity configuration.
-    nrf_uarte_baudrate_t baudrate;      ///< Baud rate.
+    nrf_uart_parity_t    parity;        ///< Parity configuration.
+    nrf_uart_baudrate_t  baudrate;      ///< Baud rate.
     uint8_t              irq_priority;  ///< Interrupt priority.
     bool                 pullup_rx;     ///< Pull up on RX pin.
     nrf_libuarte_drv_data_t rx_in_buf;     ///<buffer for incomming chars
     nrf_libuarte_drv_data_t packet_buf;    ///<buffer for transferring packets
 } nrf_libuarte_drv_config_t;
 
-typedef void (*nrf_libuarte_drv_evt_handler_t)(void * p_context,
-                                               nrf_libuarte_drv_evt_t * p_evt);
-
-extern const IRQn_Type libuarte_irqn[];
+typedef void (*nrf_libuarte_drv_evt_handler_t)(void * p_context, nrf_libuarte_drv_evt_t * p_evt);
 
 typedef struct {
     bool got_SOH;
+    bool got_stuff;
     uint8_t SOH_locn;
     uint8_t curr_locn;
     size_t packet_length;
@@ -189,52 +179,55 @@ typedef struct {
     size_t    tx_cur_idx;
 
     // Rx incomming buffer
-    nrf_libuarte_drv_data_t rx_in_buf;            //<buffer for incomming chars
+    nrf_libuarte_drv_data_t rx_in_buf;          //<buffer for incomming chars
 
     // Packet buffer management
-    nrf_libuarte_drv_data_t packet_buf;           //<buffer for transferring packets
-    size_t packet_length;
+    nrf_libuarte_drv_data_t packet_buf;         //<buffer for transferring packets
 
-    df_packet_ctl_t packet_ctl;     // control of packets    
-    df_packet_stats_t packet_stats; // status of packets for external use
+    df_packet_ctl_t packet_ctl;                 // control of packets    
+    df_packet_stats_t packet_stats;             // status of packets for external use
 
     nrf_libuarte_drv_evt_handler_t evt_handler;
-    void * p_context;               // context block that can be passed in a config
+    void * p_context;                           // context block that can be passed in a config
     
     bool enabled;
 } nrf_libuarte_drv_ctrl_blk_t;
 
 typedef struct {
     nrf_libuarte_drv_ctrl_blk_t * ctrl_blk;
-    nrfx_timer_t timer;
-    NRF_UARTE_Type * uarte;
+    nrfx_timer_t const * timer;
+    nrfx_uart_t const * uart;
 } nrf_libuarte_drv_t;
 
-
-#define NRF_LIBUARTE_DRV_DEFINE(_name, _uarte_idx, _timer_idx) \
-    STATIC_ASSERT(_uarte_idx < UARTE_COUNT, "UARTE instance not present");\
-    STATIC_ASSERT(CONCAT_2(NRF_LIBUARTE_DRV_UARTE,_uarte_idx) == 1, "UARTE instance not enabled");\
+/*
+#define NRF_LIBUARTE_DRV_DEFINE(_name, _uart_idx, _timer_idx) \
+    STATIC_ASSERT(_uart_idx < UART_COUNT, "UART instance not present");\
+    STATIC_ASSERT(CONCAT_2(NRF_LIBUARTE_DRV_UART, _uart_idx) == 1, "UARTE instance not enabled");\
     STATIC_ASSERT(CONCAT_3(NRFX_TIMER,_timer_idx, _ENABLED) == 1, "Timer instance not enabled");\
     static nrf_libuarte_drv_ctrl_blk_t CONCAT_2(_name, ctrl_blk); \
     static const nrf_libuarte_drv_t _name = { \
         .ctrl_blk = &CONCAT_2(_name, ctrl_blk), \
         .timer = NRFX_TIMER_INSTANCE(_timer_idx), \
-        .uarte = CONCAT_2(NRF_UARTE, _uarte_idx),\
-    }
-
-/* // Datafuel version
-#define NRF_LIBUARTE_DRV_DEFINE(_name, _uarte_idx, _timer_idx) \
-    STATIC_ASSERT(_uarte_idx < UARTE_COUNT, "UARTE instance not present");\
-    STATIC_ASSERT(CONCAT_2(NRF_LIBUARTE_DRV_UARTE,_uarte_idx) == 1, "UARTE instance not enabled");\
-    STATIC_ASSERT(CONCAT_3(NRFX_TIMER,_timer_idx, _ENABLED) == 1, "Timer instance not enabled");\
-    static nrf_libuarte_drv_ctrl_blk_t CONCAT_2(_name, ctrl_blk); \
-    const nrf_libuarte_drv_t _name = { \
-        .ctrl_blk = &CONCAT_2(_name, ctrl_blk), \
-        .timer = NRFX_TIMER_INSTANCE(_timer_idx), \
-        .uarte = CONCAT_2(NRF_UARTE, _uarte_idx),\
+        .uart = CONCAT_2(NRF_UART, _uart_idx),\
     }
 */
 
+#define NRF_LIBUARTE_DRV_DEFINE(_name, _uarte_idx, _timer_idx)              \
+    STATIC_ASSERT(_uarte_idx < UARTE_COUNT, "UARTE instance not present");  \
+    STATIC_ASSERT(CONCAT_2(NRF_LIBUARTE_DRV_UART,_uarte_idx) == 1, "UARTE instance not enabled");   \
+    STATIC_ASSERT(CONCAT_3(NRFX_TIMER,_timer_idx, _ENABLED) == 1, "Timer instance not enabled");    \
+    static nrf_libuarte_drv_ctrl_blk_t CONCAT_2(_name, ctrl_blk);           \
+    static const nrf_libuarte_drv_t _name = {                               \
+        .ctrl_blk = &CONCAT_2(_name, ctrl_blk),                             \
+        .uart = CONCAT_2(NRF_UART, _uarte_idx),                             \
+        .timer = NRFX_TIMER_INSTANCE(_timer_idx),                           \
+    }
+
+/*
+        
+        .uart = CONCAT_2(NRF_UART, _uarte_idx)                              \
+    }
+*/
 
 /**
  * @brief Function for initializing the libUARTE library.
@@ -306,6 +299,14 @@ bool nrf_libuarte_drv_rx_enabled(const nrf_libuarte_drv_t * const p_libuarte);
  */
 df_packet_stats_t * get_packet_stats(const nrf_libuarte_drv_t * const p_libuarte);
 
+/**
+ * @brief Clear the contents of the libuarte packet status structure
+ *  i.e. number of chars, number of packets, errors etc
+ *
+ * @param  p_libuarte Pointer to libuarte instance.
+ * @retval void
+ */
+void clear_packet_stats(const nrf_libuarte_drv_t * const p_libuarte);
 
 /**
   * @brief Get the pointer to the libuarte packet control structure

@@ -53,11 +53,10 @@ NRF_LIBUARTE_DRV_DEFINE(intbus, DF_PORT_INTBUS, DF_COMMS_TIMER_INST);
 //void init_rx_struct(void);
 //void init_msg_struct(void);
 
-ret_code_t PortInit(nrf_uarte_baudrate_t baud);
+ret_code_t PortInit(nrf_uart_baudrate_t baud);
 void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt);
 ret_code_t swap_baud(const nrf_libuarte_drv_t * const p_libuarte);
 
-void con_comms_handler(con_comms_t *rd, char c);
 msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd);
 bool is_checksum_ok(con_comms_t *rd);
 uint8_t make_lrc(char *buf, uint8_t cnt);
@@ -94,13 +93,13 @@ ret_code_t ConsoleSerialPortInit(void)
     return(ret);
 }
 
-ret_code_t PortInit(nrf_uarte_baudrate_t baud)
+ret_code_t PortInit(nrf_uart_baudrate_t baud)
 {   ret_code_t ret = NRFX_SUCCESS;
     
     nrf_libuarte_drv_config_t nrf_libuarte_drv_config = {
         .tx_pin     = TX_PIN_NUMBER,
         .rx_pin     = RX_PIN_NUMBER,
-        .parity = NRF_UARTE_PARITY_EXCLUDED,    ///< Parity configuration.
+        .parity = NRF_UART_PARITY_EXCLUDED,    ///< Parity configuration.
         .baudrate = baud,                       ///< Baud rate.
         .irq_priority = APP_IRQ_PRIORITY_LOW,   ///< Interrupt priority.
         .pullup_rx = 1,                         ///< Pull up on RX pin.
@@ -142,6 +141,7 @@ void comms_timer_tick(uint8_t timer_val)
 
             break;
         case APP_STATE_10S:
+            clear_packet_stats(&intbus);
             break;
         default:
             break;
@@ -160,56 +160,12 @@ void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
         case NRF_LIBUARTE_DRV_EVT_GOT_PACKET:
             // handle reception of a qualified (D1 // D2) packet 
             get_msg_data(&msg_data, &con_comms);  
+            con_comms.err_count = 0;
             break;
-        case NRF_LIBUARTE_DRV_EVT_RX_DATA:    ///< Data received.
-            break;
-                c = *p_evt->data.rxtx.p_data;
-                con_comms.in_char_count += 1;
-
-                //if (c == SOH_CHAR)
-                //{   NRF_LOG_INFO("SOH Rx'd. Cnt[%d]", con_comms.in_char_count);    }
-                
-                if ((con_comms.rx_char_count == 0) && (c != SOH_CHAR))
-                {   break;   }
-
-                if (nrf_gpio_pin_read(TX_ENABLE) == 0)      // Only receive data when I'm not transmitting
-                {   
-                    con_comms_handler(&con_comms, c);  
-
-                    if (con_comms.comms_state < COMMS_VISIBLE)
-                    {   con_comms.comms_state = COMMS_VISIBLE; }
-                }
-                else
-                {  
-                    NRF_LOG_INFO("Rx data while Tx. got %x", c);                 
-                }
-
-                //NRF_LOG_INFO("Rx data. got %x, state %x, charCnt %d", c, con_comms.rx_state, con_comms.rx_char_count);
-
-                if (con_comms.rx_state == RX_GOT_EOF)
-                {   if (con_comms.comms_state < COMMS_VISIBLE) 
-                    {   con_comms.comms_state = COMMS_VISIBLE;  }
-                
-                    con_comms.err_count = 0;
-                    get_msg_data(&msg_data, &con_comms);
-                }
-
-                if (con_comms.in_char_count >= RX_BUF_SIZE)
-                {   
-                    
-                    NRF_LOG_INFO("Comms: too many chars");                        
-                    clear_rx_bufs();
-
-                    if (inc_is_error(&con_comms.err_count, COMMS_TH_ERR))
-                    {   swap_baud(&intbus);                }
-                }
-
-            break;        
-//        case NRF_LIBUARTE_DRV_EVT_RX_BUF_REQ: ///< Requesting new buffer for receiving data.
-            //nrf_libuarte_drv_rx_buf_rsp(&intbus, inbuf, INBUF_SIZE);   
-//            break;
         case NRF_LIBUARTE_DRV_EVT_TX_DONE:     ///< Requested TX transfer completed.
             //NRF_LOG_INFO("Comms: Tx done event");                                    
+
+            NRF_LOG_INFO("%ld - Comms: Finsihed Sending Data", get_sys_ms());
 
             if (ddpc.nv_immediate.dev_address == DISCOVERY_DFLT_ADDR)                           // At the moment only check for collisions in adoption
             {   if (memcmp(&tx_buf, con_comms.rx_buf, tx_char_count - 1) != 0)                  // Check for data collisions
@@ -223,9 +179,9 @@ void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
 
             break;
         case NRF_LIBUARTE_DRV_EVT_ERROR:      ///< Error reported by the UARTE peripheral.
-NRF_LOG_INFO("Comms: Error");                        
+//NRF_LOG_INFO("Comms: Error");                        
         case NRF_LIBUARTE_DRV_EVT_OVERRUN_ERROR:    ///< Error reported by the driver.
-NRF_LOG_INFO("  - Overrun Error");                        
+//NRF_LOG_INFO("  - Overrun Error");                        
             
             con_comms.comms_state = COMMS_ERROR;
             
@@ -242,38 +198,6 @@ NRF_LOG_INFO("Comms: Unknown event [%x]", p_evt->type);
             clear_rx_bufs();
             break;
     }
-}
-
-void con_comms_handler(con_comms_t *rd, char c)
-{   char d = c;
-
-    switch (rd->rx_state)
-    {   
-        case RX_IS_IDLE:
-            if (c == SOH_CHAR)
-            {   rd->rx_char_count = 0;                  // set intial state of char counter
-                rd->rx_state = RX_GOT_SOH;              // advance state
-            }
-            break;
-        case RX_GOT_STUFF:
-            d = (c | 0x80);                             // pre-process the incoming character if a stuff char has been received
-        case RX_GOT_SOH:
-            if (c == STUFF_CHAR)
-            {   rd->rx_state = RX_GOT_SOH;  }
-            else if (c == EOF_CHAR)
-            {   rd->rx_state = RX_GOT_EOF;  }
-            // else .. normal char .. ust save it
-            break;
-        default:
-            goto no_save;
-            break;
-    }
-    rd->rx_buf[rd->rx_char_count] = d;
-    rd->rx_char_count += 1;
-    rd->rx_buf[rd->rx_char_count] = 0;   // clear the next char to keep a null-term buffer 
-
-no_save:
-    return;
 }
 
 msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
@@ -327,15 +251,15 @@ msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
     {
         if (retval == MSG_COMPLETE)
         {   //NRF_LOG_DEBUG("Comms - got packet");      
-            //NRF_LOG_HEXDUMP_INFO(rd->rx_buf, rd->rx_char_count);	            
+            //NRF_LOG_HEXDUMP_INFO(rd->rx_buf, length);	            
             
-            if (is_checksum_ok(rd) == true)                                     // check the msg checksum
-            {   
-                memcpy(md->msg_buf, &rd->rx_buf[1], (rd->rx_char_count - 2));   // All good .. copy the message into the msg_buf
-                md->msg_char_count =  rd->rx_char_count - 2;   
+            if (rd->packet_ctl->checksum_ok)
+            {   md->msg_char_count = (rd->packet_ctl->packet_length - 2);
+                memcpy(md->msg_buf, &rd->rx_buf[1], md->msg_char_count);        // All good .. copy the message into the msg_buf
+
                 md->msg_state = retval = MSG_OK;                                // and set the return value
-                //NRF_LOG_DEBUG("Message for me - [%x:%x]. Datalen [%x]", md->msg_type, md->msg_addr, rd->rx_char_count); 
-                
+                //NRF_LOG_DEBUG("Message for me - [%x:%x]. Datalen [%x]", md->msg_type, md->msg_addr, length); 
+                NRF_LOG_INFO("%ld - Comms: Msg for me", get_sys_ms());
                 interpret_msg(md);
             }
             else
@@ -344,8 +268,6 @@ msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
             }
         }
 
-        clear_rx_bufs();
-        rd->rx_state = RX_IS_IDLE;         // Clear the rx state flag so we can get new messages
     }
 
     return(retval);
@@ -417,7 +339,8 @@ void interpret_msg(msg_data_t *md)
         case FD_CMD_DISCOVER:
             con_comms.discovery_temp_addr = buf2int(&md->msg_buf[MSGBUF_PAYLOAD]);    // Message contains the temporary address 0xFF<TempIndex> in payload (also capture the temporary address)
             ddpc.nv_immediate.dev_address = buf2int(&md->msg_buf[MSGBUF_PAYLOAD]);  // Message contains the temporary address 0xFF<TempIndex> in payload (also capture the temporary address)
-            flash_control.do_immediate_save = true;
+            
+// TODO - allow saving of the new address            flash_control.do_immediate_save = true;
 
             int2buf(&buf[MSGBUF_ADDR], con_comms.discovery_temp_addr);                // we will respond FROM that message .. swap address payload into output address field
             
@@ -561,19 +484,19 @@ uint8_t send_attr_bytes(msg_data_t *md, char *buf, char bytes_reqd)
 }
 
 
-bool is_checksum_ok(con_comms_t *rd)
+/* bool is_checksum_ok(con_comms_t *rd)
 {
     uint8_t i;
     uint8_t lrc;
     bool retval = false;                                    // default result to "bad"
     
-    if (rd->rx_char_count >= MSG_MIN_SIZE)                  // buf will hold rx_char_count chars .. make sure there is enough for calculation
-    {   lrc = make_lrc(&rd->rx_buf[RXBUF_TYPE], (rd->rx_char_count - 3));  // Calc the LRC
-        if (lrc == rd->rx_buf[(rd->rx_char_count - 2)])       // check the lrc against the message
+    if (length >= MSG_MIN_SIZE)                  // buf will hold length chars .. make sure there is enough for calculation
+    {   lrc = make_lrc(&rd->rx_buf[RXBUF_TYPE], (length - 3));  // Calc the LRC
+        if (lrc == rd->rx_buf[(length - 2)])       // check the lrc against the message
         {   retval = true;  }                               // .. good? say so
     }
     return(retval);
-}
+} */
 
 uint8_t make_lrc(char *buf, uint8_t cnt)
 {   uint8_t i;
@@ -594,6 +517,11 @@ uint8_t make_lrc(char *buf, uint8_t cnt)
     return(history);
 }
 
+void clear_rx_bufs(void)
+{   
+    // Do I need to signal here to libuarte that I have finished processing the packet
+}
+
 
 uint8_t MakeSimpleCRC(uint8_t Byte, uint8_t History)
 {
@@ -608,15 +536,6 @@ uint8_t MakeSimpleCRC(uint8_t Byte, uint8_t History)
     }
     History = History + Byte;
     return(History);
-}
-
-
-void clear_rx_bufs(void)
-{   con_comms.rx_buf[0] = 0;                              // Wipe the SOH character from the buffer
-    con_comms.rx_buf[(con_comms.rx_char_count - 1)] = 0;    // Wipe the EOF character from the buffer    
-    con_comms.rx_char_count = 0;
-    con_comms.in_char_count = 0;
-    con_comms.rx_state = RX_IS_IDLE;
 }
 
 uint8_t IsStuffable(char theChar)
@@ -635,6 +554,8 @@ size_t ConsoleWrite(char *buf, uint8_t count)
     size_t sent = 0;
     tx_char_count = 0;
     struct nrf_serial_s const * tp_serial;
+
+    NRF_LOG_INFO("%ld - Comms: Sending Data (%d chars)", get_sys_ms(), count);
 
     clear_rx_bufs();
     

@@ -411,5 +411,5 @@ void df_gpio_cfg_output(uint32_t pin_number, uint32_t drive_type)
         NRF_GPIO_PIN_NOSENSE);
 }
 
-
-
+uint32_t get_sys_ms(void)
+{   return((app_timer_cnt_get() * ( (APP_TIMER_CONFIG_RTC_FREQUENCY + 1 ) * 1000 ) / APP_TIMER_CLOCK_FREQ));   }
