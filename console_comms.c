@@ -47,6 +47,9 @@ static msg_data_t msg_data = MSG_DATA_DEFAULT;
 char tx_buf[TX_BUF_SIZE];
 uint8_t tx_char_count;
 
+#define DF_COMMS_TIMER_INST 3
+#define DF_PORT_INTBUS 0
+
 NRF_LIBUARTE_DRV_DEFINE(intbus, DF_PORT_INTBUS, DF_COMMS_TIMER_INST);
 
 // *** function prototypes ***
@@ -81,9 +84,6 @@ ret_code_t ConsoleSerialPortInit(void)
     con_comms.comms_state = COMMS_INIT;
     con_comms.rx_buf = pkt_buf;
 
-    nrf_gpio_cfg_output(TX_ENABLE);
-    nrf_gpio_pin_clear(TX_ENABLE);    
-
     con_comms.baud_index = 1;       // TODO - this value set to 19200 to test baud cycling .. default should be Console Default = 9600 (index 1)
     ret = PortInit(baud_list[con_comms.baud_index]);
 
@@ -99,6 +99,7 @@ ret_code_t PortInit(nrf_uart_baudrate_t baud)
     nrf_libuarte_drv_config_t nrf_libuarte_drv_config = {
         .tx_pin     = TX_PIN_NUMBER,
         .rx_pin     = RX_PIN_NUMBER,
+        .txen_pin   = TX_ENABLE,
         .parity = NRF_UART_PARITY_EXCLUDED,    ///< Parity configuration.
         .baudrate = baud,                       ///< Baud rate.
         .irq_priority = APP_IRQ_PRIORITY_LOW,   ///< Interrupt priority.
@@ -141,7 +142,7 @@ void comms_timer_tick(uint8_t timer_val)
 
             break;
         case APP_STATE_10S:
-            clear_packet_stats(&intbus);
+// TODO check &| clear stats periodically            clear_packet_stats(&intbus);
             break;
         default:
             break;
@@ -175,14 +176,19 @@ void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
             }
 
             clear_rx_bufs();
-            nrf_gpio_pin_clear(TX_ENABLE);           // turn off the TxEnable pin
 
             break;
         case NRF_LIBUARTE_DRV_EVT_ERROR:      ///< Error reported by the UARTE peripheral.
 //NRF_LOG_INFO("Comms: Error");                        
-        case NRF_LIBUARTE_DRV_EVT_OVERRUN_ERROR:    ///< Error reported by the driver.
-//NRF_LOG_INFO("  - Overrun Error");                        
             
+            //p_evt->data.errorsrc 
+            // is one of:
+            /*  NRF_UART_ERROR_OVERRUN_MASK         Overrun error.
+                NRF_UART_ERROR_PARITY_MASK          Parity error.
+                NRF_UART_ERROR_FRAMING_MASK         Framing error.
+                NRF_UART_ERROR_BREAK_MASK           Break error.            
+            */                
+
             con_comms.comms_state = COMMS_ERROR;
             
             clear_rx_bufs();
@@ -572,8 +578,6 @@ size_t ConsoleWrite(char *buf, uint8_t count)
     }    
 
     tx_buf[tx_char_count++] = EOF_CHAR;
-
-    nrf_gpio_pin_set(TX_ENABLE);          // Activate  TxEnable pin
 
     ret = nrf_libuarte_drv_tx(&intbus, tx_buf, tx_char_count);
         

@@ -47,10 +47,11 @@
 
 #include "sdk_errors.h"
 #include "nrfx_uart.h"
-#include "nrfx_ppi.h"
-#include "nrfx_timer.h"
+
 #include <stdint.h>
 #include <stdbool.h>
+
+#include "../hardware_init.h"
 
 /**
  * @defgroup nrf_libuarte_drv libUARTE driver
@@ -86,37 +87,6 @@ typedef enum
     NRF_LIBUARTE_DRV_EVT_GOT_PACKET,    ///< Have received a datafuel Console comms packet
 } nrf_libuarte_drv_evt_type_t;
 
-/**
- * @brief PPI channels used by libuarte
- */
-typedef enum
-{   NRF_LIBUARTE_DRV_PPI_CH_EXT_TRIGGER_STARTRX_EN_ENDRX_STARTX,
-    NRF_LIBUARTE_DRV_PPI_CH_RXSTARTED_EXT_TSK,
-    NRF_LIBUARTE_DRV_PPI_CH_EXT_STOP_STOPRX,
-    NRF_LIBUARTE_DRV_PPI_CH_EXT_STOP_GROUPS_EN,
-    NRF_LIBUARTE_DRV_PPI_CH_RXRDY_TIMER_COUNT,
-
-    NRF_LIBUARTE_DRV_PPI_CH_ENDRX_STARTRX,
-    NRF_LIBUARTE_DRV_PPI_CH_ENDRX_EXT_TSK,
-
-    NRF_LIBUARTE_DRV_PPI_CH_RTS_PIN,
-    NRF_LIBUARTE_DRV_PPI_CH_RX_MAX,
-    NRF_LIBUARTE_DRV_PPI_CH_RX_GROUP_MAX = NRF_LIBUARTE_DRV_PPI_CH_RX_MAX,
-
-    NRF_LIBUARTE_DRV_PPI_CH_ENDTX_STARTTX = NRF_LIBUARTE_DRV_PPI_CH_RX_GROUP_MAX,
-
-    NRF_LIBUARTE_DRV_PPI_CH_MAX
-} nrf_libuarte_drv_ppi_channel_t;
-
-/**
- * @brief PPI groups used by libuarte
- */
-typedef enum {   
-    NRF_LIBUARTE_DRV_PPI_GROUP_ENDRX_STARTRX,           ///< Group used for controlling PPI connection between ENDRX and STARTRX
-    NRF_LIBUARTE_DRV_PPI_GROUP_ENDRX_EXT_RXDONE_TSK,    ///< Group used for controlling PPI connection between ENDRX and RXDONE
-    NRF_LIBUARTE_DRV_PPI_GROUP_MAX
-} nrf_libuarte_drv_ppi_group_t;
-
 typedef struct {         // generic data structure (pointer to data and size)
     uint8_t  * p_data;  ///< Pointer to the data to be sent or received.
     size_t     size;    ///< Size of the data buffer
@@ -141,6 +111,7 @@ typedef struct {
     uint32_t             rx_pin;        ///< RXD pin number.
     uint32_t             cts_pin;       ///< CTS pin number.
     uint32_t             rts_pin;       ///< RTS pin number.
+    uint32_t             txen_pin;      ///< TxEnable pin
     nrf_uart_parity_t    parity;        ///< Parity configuration.
     nrf_uart_baudrate_t  baudrate;      ///< Baud rate.
     uint8_t              irq_priority;  ///< Interrupt priority.
@@ -154,10 +125,11 @@ typedef void (*nrf_libuarte_drv_evt_handler_t)(void * p_context, nrf_libuarte_dr
 typedef struct {
     bool got_SOH;
     bool got_stuff;
-    uint8_t SOH_locn;
-    uint8_t curr_locn;
+    uint8_t in_buf_ptr;
+    
     size_t packet_length;
     bool checksum_ok;
+    bool tx_reflection;
 } df_packet_ctl_t;
 
 
@@ -171,9 +143,8 @@ typedef struct {
 } df_packet_stats_t;
 
 typedef struct {
-    nrf_ppi_channel_t ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_MAX];
-    nrf_ppi_channel_group_t ppi_groups[NRF_LIBUARTE_DRV_PPI_GROUP_MAX];
-
+    uint32_t  txen_pin;                         // The Transmit Enable pin
+    
     // Tx buffer management
     nrf_libuarte_drv_data_t tx_out_buf;
     size_t    tx_cur_idx;
@@ -195,9 +166,9 @@ typedef struct {
 
 typedef struct {
     nrf_libuarte_drv_ctrl_blk_t * ctrl_blk;
-    nrfx_timer_t const * timer;
-    nrfx_uart_t const * uart;
+    nrfx_uart_t const uarta;
 } nrf_libuarte_drv_t;
+
 
 /*
 #define NRF_LIBUARTE_DRV_DEFINE(_name, _uart_idx, _timer_idx) \
@@ -212,6 +183,7 @@ typedef struct {
     }
 */
 
+/*
 #define NRF_LIBUARTE_DRV_DEFINE(_name, _uarte_idx, _timer_idx)              \
     STATIC_ASSERT(_uarte_idx < UARTE_COUNT, "UARTE instance not present");  \
     STATIC_ASSERT(CONCAT_2(NRF_LIBUARTE_DRV_UART,_uarte_idx) == 1, "UARTE instance not enabled");   \
@@ -219,15 +191,25 @@ typedef struct {
     static nrf_libuarte_drv_ctrl_blk_t CONCAT_2(_name, ctrl_blk);           \
     static const nrf_libuarte_drv_t _name = {                               \
         .ctrl_blk = &CONCAT_2(_name, ctrl_blk),                             \
-        .uart = CONCAT_2(NRF_UART, _uarte_idx),                             \
-        .timer = NRFX_TIMER_INSTANCE(_timer_idx),                           \
-    }
-
-/*
-        
-        .uart = CONCAT_2(NRF_UART, _uarte_idx)                              \
+        .uarta = {                                                          \
+            .p_reg = &CONCAT_2(NRF_UART, _uarte_idx),                       \
+            .drv_inst_idx = _uarte_idx                                      \
+        }                                                                   \
     }
 */
+
+#define NRF_LIBUARTE_DRV_DEFINE(_name, _uarte_idx, _timer_idx)              \
+    STATIC_ASSERT(_uarte_idx < UARTE_COUNT, "UARTE instance not present");  \
+    STATIC_ASSERT(CONCAT_2(NRF_LIBUARTE_DRV_UART,_uarte_idx) == 1, "UARTE instance not enabled");   \
+    STATIC_ASSERT(CONCAT_3(NRFX_TIMER,_timer_idx, _ENABLED) == 1, "Timer instance not enabled");    \
+    static nrf_libuarte_drv_ctrl_blk_t CONCAT_2(_name, ctrl_blk);           \
+    static const nrf_libuarte_drv_t _name = {                               \
+        .ctrl_blk = &CONCAT_2(_name, ctrl_blk),                             \
+        .uarta = NRFX_UART_INSTANCE(_uarte_idx),                            \
+    }
+
+
+
 
 /**
  * @brief Function for initializing the libUARTE library.
