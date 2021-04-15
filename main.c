@@ -125,7 +125,10 @@ int main(void)
     while (true)
     {
         if (!NRF_LOG_PROCESS())
-        {   __WFE();    }        
+        {   __WFE();    }
+        
+        if (got_new_console_packet())
+        {    handle_new_console_packet();   }
         
       //nrf_delay_ms(2000);
       //update_rng();

@@ -67,10 +67,6 @@ void interpret_msg(msg_data_t *md);
 uint8_t handle_action_cmd(msg_data_t *md, char *buf);
 uint8_t send_attr_bytes(msg_data_t *md, char *buf, char bytes_reqd);
 
-void clear_rx_bufs(void);
-
-// size_t ConsoleWrite(char *buf, uint8_t count);
-
 static void sleep_handler(void)
 {
     __WFE();
@@ -132,22 +128,43 @@ void comms_timer_tick(uint8_t timer_val)
         case APP_STATE_1S:
             ps = get_packet_stats(&intbus);
 
-            NRFX_LOG_INFO("Comms Status: chars[%d], SOH[%d], EOF[%d], err[%d], good packets[%d], total packets[%d] ",
+            NRFX_LOG_INFO("Comms Status: chars[%d], EOF[%d], err[%d], good packets[%d], total packets[%d], elapsed[%ld] ",
                         ps->total_chars,
-                        ps->SOH_cnt,
                         ps->EOF_cnt,
                         ps->err_cnt,
                         ps->good_packets,
-                        ps->total_packets);
+                        ps->total_packets,
+                        ps->elapsed_ms);     // TODO Remove this;
 
             break;
         case APP_STATE_10S:
-// TODO check &| clear stats periodically            clear_packet_stats(&intbus);
+            ps = get_packet_stats(&intbus);
+            if (ps->total_packets == 0)
+            {   nrf_libuarte_drv_rx_start(&intbus);  }
+
+            clear_packet_stats(&intbus);
             break;
         default:
             break;
     }
 }
+
+bool got_new_console_packet(void)
+{   df_packet_ctl_t * pc = get_packet_control(&intbus);
+    return(pc->packet_length>0);
+}
+
+void handle_new_console_packet(void)
+{   df_packet_ctl_t * pc = get_packet_control(&intbus);
+
+    if (pc->tx_reflection == false)
+    {   get_msg_data(&msg_data, &con_comms);   }
+
+    clr_pkt_ctl(&intbus);               // Finished with the packet meta-data
+
+    con_comms.err_count = 0;
+}
+
 
 void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
 {
@@ -160,13 +177,10 @@ void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
     {
         case NRF_LIBUARTE_DRV_EVT_GOT_PACKET:
             // handle reception of a qualified (D1 // D2) packet 
-            get_msg_data(&msg_data, &con_comms);  
-            con_comms.err_count = 0;
+
             break;
         case NRF_LIBUARTE_DRV_EVT_TX_DONE:     ///< Requested TX transfer completed.
-            //NRF_LOG_INFO("Comms: Tx done event");                                    
-
-            NRF_LOG_INFO("%ld - Comms: Finsihed Sending Data", get_sys_ms());
+            //NRF_LOG_INFO("%ld - Comms: Finished Sending Data", get_sys_ms());
 
             if (ddpc.nv_immediate.dev_address == DISCOVERY_DFLT_ADDR)                           // At the moment only check for collisions in adoption
             {   if (memcmp(&tx_buf, con_comms.rx_buf, tx_char_count - 1) != 0)                  // Check for data collisions
@@ -175,11 +189,9 @@ void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
                 {   ddpc.nv_immediate.dev_address = con_comms.discovery_temp_addr;     }        // No collision .. set the address to the temporary Adoption address
             }
 
-            clear_rx_bufs();
-
             break;
         case NRF_LIBUARTE_DRV_EVT_ERROR:      ///< Error reported by the UARTE peripheral.
-//NRF_LOG_INFO("Comms: Error");                        
+            //NRF_LOG_INFO("Comms: Error");                        
             
             //p_evt->data.errorsrc 
             // is one of:
@@ -191,8 +203,6 @@ void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
 
             con_comms.comms_state = COMMS_ERROR;
             
-            clear_rx_bufs();
-
             if (inc_is_error(&con_comms.err_count, COMMS_TH_ERR))
             {   con_comms.err_count = 0;
                 swap_baud(&intbus);              
@@ -201,7 +211,6 @@ void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
             break;
         default:
 NRF_LOG_INFO("Comms: Unknown event [%x]", p_evt->type);                                               
-            clear_rx_bufs();
             break;
     }
 }
@@ -213,6 +222,9 @@ msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
 
     if (rd->packet_ctl->packet_length >= MSG_MIN_SIZE)
     {
+        if (rd->comms_state < COMMS_VISIBLE)
+        {   rd->comms_state = COMMS_VISIBLE;    }
+        
         md->msg_type = rd->rx_buf[RXBUF_TYPE];
 
         if (isInCharArray(md->msg_type, ddpc.dev_type, NUM_DEV_TYPES))              // See if the message type matches one in my array of acceptable types
@@ -256,16 +268,13 @@ msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
     if (retval > MSG_INCOMPLETE)
     {
         if (retval == MSG_COMPLETE)
-        {   //NRF_LOG_DEBUG("Comms - got packet");      
-            //NRF_LOG_HEXDUMP_INFO(rd->rx_buf, length);	            
-            
-            if (rd->packet_ctl->checksum_ok)
-            {   md->msg_char_count = (rd->packet_ctl->packet_length - 2);
+        {   if (rd->packet_ctl->checksum_ok)
+            {   
+                md->msg_char_count = (rd->packet_ctl->packet_length - 2);
                 memcpy(md->msg_buf, &rd->rx_buf[1], md->msg_char_count);        // All good .. copy the message into the msg_buf
 
                 md->msg_state = retval = MSG_OK;                                // and set the return value
-                //NRF_LOG_DEBUG("Message for me - [%x:%x]. Datalen [%x]", md->msg_type, md->msg_addr, length); 
-                NRF_LOG_INFO("%ld - Comms: Msg for me", get_sys_ms());
+                NRF_LOG_INFO("Comms: Msg for me");
                 interpret_msg(md);
             }
             else
@@ -363,9 +372,9 @@ void interpret_msg(msg_data_t *md)
         case FD_CMD_IDENT:
             if (md->msg_buf[MSGBUF_PAYLOAD] & IDENT_LED)
             {   wipeAllLEDSlots();
-                a = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_MED, 8, 32, 0xFF);
-                c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_MED, 8, 32, a);
-                c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_MED, 8, 32, c);
+                a = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_MED, 8, 32, NULL, 0xFF);
+                c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_MED, 8, 32, NULL, a);
+                c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_MED, 8, 32, NULL, c);
                 loopLEDPattern(a, c);
             }
 
@@ -523,11 +532,6 @@ uint8_t make_lrc(char *buf, uint8_t cnt)
     return(history);
 }
 
-void clear_rx_bufs(void)
-{   
-    // Do I need to signal here to libuarte that I have finished processing the packet
-}
-
 
 uint8_t MakeSimpleCRC(uint8_t Byte, uint8_t History)
 {
@@ -562,9 +566,7 @@ size_t ConsoleWrite(char *buf, uint8_t count)
     struct nrf_serial_s const * tp_serial;
 
     NRF_LOG_INFO("%ld - Comms: Sending Data (%d chars)", get_sys_ms(), count);
-
-    clear_rx_bufs();
-    
+   
     tx_buf[tx_char_count++] = SOH_CHAR;
 
     // add stuff characters into the output buffer if required
@@ -607,41 +609,4 @@ ret_code_t swap_baud(const nrf_libuarte_drv_t * const p_libuarte)
     return(ret);
 }
 
-uint8_t makeCommsStatusFlashes(uint8_t idx, uint8_t commsStatus)
-{   uint8_t c;
-
-    switch (commsStatus)
-    {   case COMMS_INIT:
-            c = addLEDPattern(PROC_LED_WHITE, LED_SINGLE_FLASH, 8, 16, idx);  
-            break;
-        case COMMS_ERROR:
-            c = addLEDPattern(PROC_LED_RED, LED_DOUBLE_FLASH, 16, 32, idx);    
-            break;
-        case COMMS_DISCONNECTED:
-            c = addLEDPattern(PROC_LED_MAGENTA, LED_SINGLE_FLASH, 8, 16, idx);
-            break;
-        case COMMS_AUTOBAUD:
-            c = addLEDPattern(PROC_LED_MAGENTA, LED_DOUBLE_FLASH, 16, 32, idx);
-            break;
-        case COMMS_VISIBLE:
-            c = addLEDPattern(PROC_LED_YELLOW, LED_DOUBLE_FLASH, 16, 32, idx);
-            break;
-        case COMMS_ADOPTING: 
-            c = addLEDPattern(PROC_LED_ORANGE, LED_DOUBLE_FLASH, 16, 32, idx);
-            break;
-        case COMMS_FOSTERED:
-            c = addLEDPattern(PROC_LED_GREEN, LED_SINGLE_FLASH, 8, 16, idx);
-            break;
-        case COMMS_ONLINE:
-            c = addLEDPattern(PROC_LED_GREEN, LED_DOUBLE_FLASH, 16, 32, idx);
-            break;
-        default:
-            c = addLEDPattern(PROC_LED_RED, LED_SINGLE_FLASH, 8, 16, idx);
-            break;
-    }
-
-    c = addLEDPattern(PROC_LED_BLUE, LED_SINGLE_FLASH, 8, 16, c);
-
-    return(c);
-}
 

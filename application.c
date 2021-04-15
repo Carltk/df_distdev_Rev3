@@ -170,36 +170,21 @@ void handle_push_button(void)
 
 
 void makeSysStatusFlashes(void)
-{
-    uint8_t a, c;
+{   uint8_t a, c;
     
     wipeAllLEDSlots();
 
     // explode the hardware status block into LED flashes
 
-
-    // add patterns backwards to capture the nextLink
-/*
-    a = addLEDPattern(PROC_LED_GREEN, LED_DOUBLE_FLASH, 16, 32, 0xFF);    
-    c = addLEDPattern(PROC_LED_MAGENTA, LED_FLASH_ON, 2, 4, a);
-
-    c = addLEDPattern(PROC_LED_GREEN, LED_DOUBLE_FLASH, 16, 32, c);    
-    c = addLEDPattern(PROC_LED_RED, LED_SINGLE_FLASH, 8, 16, c);
-*/
-    a = addLEDPattern(PROC_LED_GREEN, LED_DOUBLE_FLASH, 16, 32, 0xFF);    
-    c = addLEDPattern(PROC_LED_ORANGE, LED_SINGLE_FLASH, 8, 16, c);
-    
-    c = makeCommsStatusFlashes(c, con_comms.comms_state);
+    a = addLEDPattern(PROC_LED_VIOLET, LED_DOUBLE_FLASH, 16, 32, NULL, 0xFF);    
+    c = addLEDPattern(PROC_LED_ORANGE, LED_SINGLE_FLASH, 8, 16, NULL, c);
+    c = makeCommsStatusFlashes(c, con_comms.comms_state, false);
+    c = makePumpStatusFlashes(c, pump.pump_state, false);
 
     loopLEDPattern(a, c);       // Write the loop-back index into the first pattern block & init the pattern
-
 }
 
-
 /**
-* @defgroup DDPC Application Temperature Handler
-* @{
-*
 * @brief Function for initializing the on-chip temperature monitor
 *
 * @retval NRFX_SUCCESS                   Driver was successfully initialized.
@@ -244,8 +229,6 @@ void do_factory_default(bool SuperDflt)
 
     //flash_control.gc_required = true;
 }
-
-/** @} */
 
 void pump_action_cmd(pump_controller_t *this_pump, uint8_t cmd)
 {
@@ -292,7 +275,7 @@ void pump_stop_transaction(pump_controller_t *this_pump)
 void pump_state_machine(pump_controller_t *this_pump, pump_caller caller)
 {
       switch (this_pump->pump_state & 0x0F)  
-    {
+      {
         case PUMP_STATE_IDLE:                                   // Pump is Idle .. no transaction taking place
             if (this_pump->nozzle)                                   // Nozzle lifted .. go to call state
             {   pump_change_state(this_pump, PUMP_STATE_CALL, 0);     

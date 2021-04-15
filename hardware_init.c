@@ -152,7 +152,7 @@ void df_mode_handler(uint8_t pin_no, uint8_t button_action)
     NRFX_LOG_INFO("Mode pin_no [%d] State [%x]", pin_no, button_action);                     
     
     if (button_action)
-    {   mode_button_LED = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_MED, 120, 120, 0xFF);     // Start a 1sec flash in yellow
+    {   mode_button_LED = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_MED, 120, 120, NULL, 0xFF);     // Start a 1sec flash in yellow
         loopLEDPattern(mode_button_LED, mode_button_LED);                                     // change the linkNext pointer to itself
         ledNewValPoke(mode_button_LED);                                                                      // Force the new value into the LED display  
     }

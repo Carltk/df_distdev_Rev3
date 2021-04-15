@@ -75,8 +75,12 @@ NRF_LOG_MODULE_REGISTER();
 #define IN_CHAR_LEN     1
 static uint8_t in_char;
 
-static void clear_packet_control(const nrf_libuarte_drv_t * const p_libuarte);
+// local function protoypes
 static void irq_handler(nrfx_uart_event_t const * p_event, void * p_context);
+static void clr_buf_ctl(df_packet_ctl_t * pc);
+
+
+
 
 ret_code_t nrf_libuarte_drv_init(const nrf_libuarte_drv_t * const p_libuarte,
                              nrf_libuarte_drv_config_t * p_config,
@@ -156,7 +160,7 @@ ret_code_t nrf_libuarte_drv_tx(const nrf_libuarte_drv_t * const p_libuarte,
 ret_code_t nrf_libuarte_drv_rx_start(const nrf_libuarte_drv_t * const p_libuarte)
 {
     /* Reset byte counting */
-    clear_packet_control(p_libuarte);
+    clr_buf_ctl(&p_libuarte->ctrl_blk->packet_ctl);
 
     nrfx_uart_rx_enable(&p_libuarte->uarta);
     nrfx_uart_rx(&p_libuarte->uarta, &in_char, IN_CHAR_LEN);
@@ -178,9 +182,6 @@ void clear_packet_stats(const nrf_libuarte_drv_t * const p_libuarte)
 
 df_packet_ctl_t * get_packet_control(const nrf_libuarte_drv_t * const p_libuarte)
 {   return(&p_libuarte->ctrl_blk->packet_ctl);      }
-
-static void clear_packet_control(const nrf_libuarte_drv_t * const p_libuarte)
-{   memset(&p_libuarte->ctrl_blk->packet_ctl, 0x00, sizeof(df_packet_ctl_t));   }
 
 
 static uint8_t make_lrc(char *buf, uint8_t cnt)
@@ -214,13 +215,18 @@ static bool is_checksum_ok(char * buf, uint8_t len)
     return(retval);
 }
 
-void clr_buf_ctl(df_packet_ctl_t * pc)
-{   pc->checksum_ok = false;
+void clr_pkt_ctl(const nrf_libuarte_drv_t * const p_libuarte)
+{   p_libuarte->ctrl_blk->packet_ctl.packet_length = 0;
+    p_libuarte->ctrl_blk->packet_ctl.checksum_ok = false;
+    p_libuarte->ctrl_blk->packet_ctl.tx_reflection = false;
+}
+
+static void clr_buf_ctl(df_packet_ctl_t * pc)
+{   
     pc->got_SOH = false;
     pc->got_stuff = false;
-    pc->tx_reflection = false;
+    pc->in_buf_ptr = 0;
 }            
-
 
 
 static void irq_handler(nrfx_uart_event_t const * p_event, void * p_context)
@@ -245,6 +251,9 @@ static void irq_handler(nrfx_uart_event_t const * p_event, void * p_context)
                         .rxtx = {.p_data = cb->tx_out_buf.p_data, .size = cb->tx_out_buf.size } 
                     } };
                cb->evt_handler(cb, &evt);
+               
+               nrfx_uart_rx_enable(&ctxt->uarta);	                        
+               nrfx_uart_rx(&ctxt->uarta, &in_char, IN_CHAR_LEN);                // restart comms rx
             
             break;
         case NRFX_UART_EVT_RX_DONE:
@@ -261,76 +270,82 @@ static void irq_handler(nrfx_uart_event_t const * p_event, void * p_context)
                 break;                                  // and abort
             }
 
-            cb->rx_in_buf[cb->packet_ctl.in_buf_ptr] = char_in;     // Save the chaar in the in_buf
-            cb->packet_ctl.in_buf_ptr += 1;                         // and increment the in_buf pointer
+            cb->rx_in_buf.p_data[cb->packet_ctl.in_buf_ptr] = char_in;  // Save the char in the in_buf
+            cb->packet_ctl.in_buf_ptr += 1;                             // and increment the in_buf pointer
 
-            if (cb->tx_out_buf.size > 0)                    // Check if there are ongoing Tx comms
-            {   cb->packet_ctl.tx_reflection = true;    }   // set the tx_reflection flag
-
-            if (cb->packet_ctl.got_SOH)
+            if ((cb->packet_ctl.in_buf_ptr == 2) && (char_in == 0xFE))
             {   
-            
-                if (char_in == EOF_CHAR)                // packet finished .. bundle packet up to application layer
-                {   cb->packet_stats.EOF_cnt += 1;
-                    cb->packet_stats.total_packets += 1;
+                char_in = char_in | 0x80;   
+            }
 
-                    cb->packet_ctl.packet_length = cb->packet_ctl.in_buf_ptr;       // in_buf_ptr is already increment to an effective count
-    
-                    memcpy(cb->packet_buf.p_data, cb->rx_in_buf.p_data, cb->packet_ctl.packet_length);   // Move the packet from in_buf to packet_buf
+            nrfx_uart_rx_enable(&ctxt->uarta);	            
+            nrfx_uart_rx(&ctxt->uarta, &in_char, IN_CHAR_LEN);         // restart comms rx
 
-                    if (is_checksum_ok(cb->packet_buf.p_data, cb->packet_ctl.packet_length))
-                    {   cb->packet_stats.good_packets += 1;
-                        cb->packet_ctl.checksum_ok = true;
-                    }
+            if (char_in == SOH_CHAR)  
+            {   cb->packet_stats.SOH_cnt += 1;
+                clr_buf_ctl(&cb->packet_ctl);
+                cb->packet_ctl.got_SOH = true;
 
-                   nrf_libuarte_drv_evt_t evt = {
-                        .type = NRF_LIBUARTE_DRV_EVT_GOT_PACKET, 
-                        .data = {
-                            .rxtx = {.p_data = cb->packet_buf.p_data, .size = cb->packet_ctl.packet_length } 
-                        } };
-                   cb->evt_handler(cb, &evt);
+                cb->rx_in_buf.p_data[cb->packet_ctl.in_buf_ptr] = char_in;  // Save the char in the in_buf
+                cb->packet_ctl.in_buf_ptr += 1;                             // and increment the in_buf pointer
 
-                    clr_buf_ctl(&cb->packet_ctl);       // quick reset to state just by saying there is no SOH .. routine will start again
-                }
-                else if (char_in == SOH_CHAR)        // another SOH .. reset and start again
-                {   cb->packet_stats.SOH_cnt += 1;
-                    clr_buf_ctl(&cb->packet_ctl);
-                    cb->packet_ctl.got_SOH = true;
-                }
-                // else - nothing to do .. uarte automatically saves characters
+                cb->packet_ctl.SOH_ms = get_sys_ms();        // TODO Remove this
             }
             else
-            {   if (char_in == SOH_CHAR)  
-                {   cb->packet_stats.SOH_cnt += 1;
-                    clr_buf_ctl(&cb->packet_ctl);
-                    cb->packet_ctl.got_SOH = true;
+            {   if (cb->packet_ctl.got_SOH)
+                {   if (char_in == EOF_CHAR)                // packet finished .. bundle packet up to application layer
+                    {   cb->packet_stats.EOF_cnt += 1;
+                        cb->packet_stats.total_packets += 1;
+
+                        cb->packet_ctl.packet_length = cb->packet_ctl.in_buf_ptr;       // in_buf_ptr is already increment to an effective count
+    
+                        cb->packet_ctl.EOF_ms = get_sys_ms();       // TODO Remove this
+                        cb->packet_stats.elapsed_ms = cb->packet_ctl.EOF_ms - cb->packet_ctl.SOH_ms;      // TODO Remove this
+
+                        memcpy(cb->packet_buf.p_data, cb->rx_in_buf.p_data, cb->packet_ctl.packet_length);   // Move the packet from in_buf to packet_buf
+
+                        if (is_checksum_ok(cb->packet_buf.p_data, cb->packet_ctl.packet_length))
+                        {   cb->packet_stats.good_packets += 1;
+                            cb->packet_ctl.checksum_ok = true;
+                        }
+
+                        nrf_libuarte_drv_evt_t evt = {
+                            .type = NRF_LIBUARTE_DRV_EVT_GOT_PACKET, 
+                            .data = {
+                                .rxtx = {.p_data = cb->packet_buf.p_data, .size = cb->packet_ctl.packet_length } 
+                            } };
+                        cb->evt_handler(cb, &evt);
+
+                        clr_buf_ctl(&cb->packet_ctl);       // quick reset to state just by saying there is no SOH .. routine will start again
+                        break;
+                    }
+                }
+                else    // chars received when there is no SOH .. just drop them
+                {   
+                    break;       
                 }
             }
 
-            if (cb->packet_ctl.got_stuff == false)
-            {   cb->rx_in_buf[cb->packet_ctl.in_buf_ptr] = char_in; 
-                cb->packet_ctl.in_buf_ptr += 1;
-            }
+            if (cb->tx_out_buf.size > 0)                                // Check if there are ongoing Tx comms
+            {   cb->packet_ctl.tx_reflection = true;    }               // set the tx_reflection flag
 
             if (cb->packet_ctl.in_buf_ptr > (cb->rx_in_buf.size - 20))       // Drop the buffer if there are size-20 bytes received without packet delimiters
             {   clr_buf_ctl(&cb->packet_ctl);    
                 cb->packet_stats.err_cnt += 1;                               // Log a packet error
             } 
 
-            nrfx_uart_rx(&ctxt->uarta, &in_char, IN_CHAR_LEN);                // restart comms rx
             break;
         case NRFX_UART_EVT_ERROR:
             cb->packet_stats.err_cnt += 1;
 
             nrf_libuarte_drv_evt_t err_evt = 
                     {   .type = NRF_LIBUARTE_DRV_EVT_ERROR, 
-                        //.data = { .errorsrc = nrfx_uart_errorsrc_get(&ctxt->uarta) }
-                        .data = { .errorsrc = nrf_uart_errorsrc_get_and_clear((NRF_UART_Type *)&ctxt->uarta)
-                        }    
+                        .data = { .errorsrc = p_event->data.error.error_mask}    
                     };
-
-            nrfx_uart_rx(&ctxt->uarta, &in_char, IN_CHAR_LEN);                // restart comms rx
             cb->evt_handler(&cb, &err_evt);
+            
+            nrfx_uart_rx_enable(&ctxt->uarta);	                        
+            nrfx_uart_rx(&ctxt->uarta, &in_char, IN_CHAR_LEN);                // restart comms rx
             break;
         default:
             break;

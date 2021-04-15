@@ -1,13 +1,14 @@
-#include "df_routines.h"
-#include "led_control.h"
-#include "hardware_init.h"
 #include "app_timer.h"
 #include "nrfx_clock.h"
 #include "nrfx_i2s.h"
 
 #include "nrf_delay.h"
-
 #include "nrfx_log.h"
+
+#include "df_routines.h"
+#include "led_control.h"
+#include "hardware_init.h"
+
 
 #define LED_MS_PER_TICK 125                         // LED flash timer resolution = 125mS = 1/8 second
 #define RESET_BITS      6                           // Enough reset bits to output >50uS at 10uS per 32-bit buffer
@@ -34,23 +35,25 @@ static void i2s_data_handler(nrfx_i2s_buffers_t const * p_released, uint32_t sta
 static uint32_t calcChannelVal(uint8_t level);
 static void fillBuffers(uint8_t RVal, uint8_t GVal, uint8_t BVal, bool ledState);
 static ret_code_t sendLEDBlocks(proc_led_t * PL, bool ledState);
-static void setLEDOK(bool onlyOK);
-static void setDefaultLEDState(void);
+static void setStartupLEDState(void);
 static uint8_t roll_mask(uint32_t * mask);
 static void led_timer_handle(void * p_context);
 
 // *** global function prototypes in header file ***
 
 // Colour data structures for the multi-colour LED
-#define bright_scale 50        // Brightscale MAX=128 but scale down to reduce brightness
-const uint8_t PROC_LED_RED[]     = {((2*bright_scale)-1),0,0};       // Red used for Error status
-const uint8_t PROC_LED_GREEN[]   = {0,((2*bright_scale)-1),0};       // Green used for OK status    
-const uint8_t PROC_LED_ORANGE[]  = {((2*bright_scale)-1),(bright_scale-1),0};     // Orange used for "Transaction" indication
-const uint8_t PROC_LED_YELLOW[]  = {((2*bright_scale)-1),((2*bright_scale)-1),0};     // Yellow used for pushbutton timing indication
-const uint8_t PROC_LED_CYAN[]    = {0,((2*bright_scale)-1),((2*bright_scale)-1)};     // Cyan used for "Comms" indication
-const uint8_t PROC_LED_BLUE[]    = {0,0,((2*bright_scale)-1)};       
-const uint8_t PROC_LED_MAGENTA[] = {((2*bright_scale)-1),0,((2*bright_scale)-1)};     // Magenta used for "Memory" indication
-const uint8_t PROC_LED_WHITE[]   = {(bright_scale-1),(bright_scale-1),(bright_scale-1)};   // White
+#define dimmer 2        // Brightscale MAX=128 but scale down to reduce brightness !!!!NEVER set this to 0!!!!
+
+const uint8_t PROC_LED_RED[]     = {(uint8_t)(255/dimmer),0,0};       // Red used for Error status
+const uint8_t PROC_LED_GREEN[]   = {0,(uint8_t)(255/dimmer),0};       // Green used for OK status    
+const uint8_t PROC_LED_YELLOW_GREEN[] = {(uint8_t)(194/dimmer),(uint8_t)(194/dimmer),0};       // Yellow- Green 
+const uint8_t PROC_LED_ORANGE[]  = {(uint8_t)(255/dimmer),(uint8_t)(128/dimmer),0};     // Orange used for "Transaction" indication
+const uint8_t PROC_LED_YELLOW[]  = {(uint8_t)(255/dimmer),(uint8_t)(255/dimmer),0};     // Yellow used for pushbutton timing indication
+const uint8_t PROC_LED_CYAN[]    = {0,(uint8_t)(255/dimmer),(uint8_t)(255/dimmer)};     // Cyan used for "Comms" indication
+const uint8_t PROC_LED_BLUE[]    = {0,0,(uint8_t)(255/dimmer)};       
+const uint8_t PROC_LED_MAGENTA[] = {(uint8_t)(255/dimmer),0,(uint8_t)(255/dimmer)};     // Magenta used for "Memory" indication
+const uint8_t PROC_LED_VIOLET[] =  {(uint8_t)(143/dimmer),0,(uint8_t)(255/dimmer)};     // Magenta used for "Memory" indication
+const uint8_t PROC_LED_WHITE[]   = {(uint8_t)(255/dimmer),(uint8_t)(255/dimmer),(uint8_t)(255/dimmer)};   // White
 
 
 // *** Global Functions ***
@@ -84,7 +87,7 @@ ret_code_t df_led_init(void)
     ret = app_timer_start(led_timer, APP_TIMER_TICKS(LED_MS_PER_TICK), NULL);       // Start the AppTimer
     if (ret != NRFX_SUCCESS) goto IL_x; 
 
-    setDefaultLEDState();                   // Set up the initial flash state
+    setStartupLEDState();                   // Set up the initial flash state
     ret = nrfx_i2s_init(&i2s_config, i2s_data_handler);
 
 IL_x:
@@ -101,7 +104,7 @@ void ledNewValPoke(uint8_t Idx)
 void wipeAllLEDSlots(void)
 {   memset(&procled, 0x00, (sizeof(proc_led_t) * NUM_PROC_LED_SLOTS));  }
 
-uint8_t addLEDPattern(const uint8_t * colourAry, uint32_t flashPattern, uint8_t cycleDwell, uint8_t slotTimeout, uint8_t link)
+uint8_t addLEDPattern(const uint8_t * colourAry, uint32_t flashPattern, uint8_t cycleDwell, uint8_t slotTimeout, void * p_func, uint8_t link)
 {   // Add a new LED pattern to a blank slot in the stack 
     uint8_t i;
     uint8_t thisSlot = 0xFF;
@@ -118,6 +121,7 @@ uint8_t addLEDPattern(const uint8_t * colourAry, uint32_t flashPattern, uint8_t 
             PL->status.cycleDwellCount = cycleDwell;       
             PL->slotTimeout= slotTimeout;           
             PL->status.slotTimeLeft = slotTimeout;         
+            PL->p_run_after_dwell = p_func;
             PL->linkNext = link;              
             PL->inUse = true;
             thisSlot = i;                       // return the index of this slot
@@ -236,28 +240,40 @@ static ret_code_t sendLEDBlocks(proc_led_t * PL, bool ledState)
     return(ret);
 }
 
-static void setLEDOK(bool onlyOK)
-{   if (onlyOK)
-    {   wipeAllLEDSlots();    }       // Clear the blink pattern array
+static void setLEDSystemStatus()
+{   uint8_t a, c;
     
-    addLEDPattern(PROC_LED_GREEN, LED_FLASH_MED, 16, 0xFF, 0xFF);      // Green 0.5S ON, 0.5S OFF. cycle every 2S, Never timeout, link next 
+    wipeAllLEDSlots();   
+    // system status has 3 flashes:
+        // 1 - system state
+            // Green=OK, 
+            // TODO add more system states
+        // 2 - comms state
+            // 
+        // 3 - pump state
+    // Add patterns backwards
+    a = addLEDPattern(PROC_LED_WHITE, LED_FLASH_OFF, 4, 8, setLEDSystemStatus, 0xFF);   // just a place-holder (1/8 sec) for the reload routine
+    c = makePumpStatusFlashes(a, pump.pump_state, true);
+    c = makeCommsStatusFlashes(c, con_comms.comms_state, true);
+    c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_ON, 8, 16, NULL, c);      // Green 0.5S ON, 0.5S OFF. cycle every 2S, Never timeout, link next     
+    //c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_MED, 32, 0xFF, NULL, 0xFF);      // Green 0.5S ON, 0.5S OFF. cycle every 2S, Never timeout, link next     
+    loopLEDPattern(a, c);
 }
 
-static void setDefaultLEDState(void)
+static void setStartupLEDState(void)
 {   uint8_t a, c;
 
     wipeAllLEDSlots();
 
     // add patterns backwards to capture the nextLink
-    a = addLEDPattern(PROC_LED_WHITE, LED_FLASH_OFF, 4, 8, 0xFF);   // Blank 
-    c = addLEDPattern(PROC_LED_WHITE, LED_FLASH_ON, 2, 4, a);   
-    c = addLEDPattern(PROC_LED_CYAN, LED_FLASH_ON, 2, 4, c);  
-    c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_ON, 2, 4, c);  
-    c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_ON, 2, 4, c); 
-    c = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_ON, 2, 4, c);
-    c = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_ON, 2, 4, c);
-    c = addLEDPattern(PROC_LED_RED, LED_FLASH_ON, 2, 4, c);      // Red, ON, dwell=2/8S, delete=2/8S
-    
+    a = addLEDPattern(PROC_LED_WHITE, LED_FLASH_OFF, 4, 8, NULL, 0xFF);   // Blank 
+    c = addLEDPattern(PROC_LED_WHITE, LED_FLASH_ON, 2, 4, NULL, a);   
+    c = addLEDPattern(PROC_LED_CYAN, LED_FLASH_ON, 2, 4, NULL, c);  
+    c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_ON, 2, 4, NULL, c);  
+    c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_ON, 2, 4, NULL, c); 
+    c = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_ON, 2, 4, NULL, c);
+    c = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_ON, 2, 4, NULL, c);
+    c = addLEDPattern(PROC_LED_RED, LED_FLASH_ON, 2, 4, NULL, c);      // Red, ON, dwell=2/8S, delete=2/8S
     loopLEDPattern(a, c);
 }
 
@@ -300,24 +316,106 @@ static void led_timer_handle(void * p_context)
 
             PL->status.cycleDwellCount -= 1;                        // Check to see if we've timed out this colour
             if (PL->status.cycleDwellCount == 0)                    // yes?
-            {   // NRFX_LOG_INFO("leds: cycle dwell timeout on idx [%d]", i);                 
+            {   //NRFX_LOG_INFO("leds: cycle dwell timeout on idx [%d]", i);                 
                 PL->status.cycleDwellCount = PL->cycleDwell;        // reset the cycle dwell counter
                 
                 if (PL->linkNext != 0xFF)                           // see if we have a next-slot-link
                 {   procled_current = PL->linkNext; }               // if so, set up the jump for next timer handler
                 else
                 {   procled_current = i+1;  }                       // No next-slot-link .. set up for next slot in the stack
+
+                if (PL->p_run_after_dwell != NULL)                  // if there's a dwell-timeout function
+                {   (*PL->p_run_after_dwell)();   }                 //  .. run it here
             }
             
             return;       
         }
-        unusedCnt+=1;
+        else
+        {   unusedCnt+=1;   }
     }
    
     if (i >= NUM_PROC_LED_SLOTS) procled_current = 0;
     if (procled_current >= NUM_PROC_LED_SLOTS) procled_current = 0;
     if (unusedCnt >= NUM_PROC_LED_SLOTS) 
-    {   setLEDOK(true);             }   // if there are no active slots, reinit to OK green flash
+    {   setLEDSystemStatus();             }   // if there are no active slots, reinit to OK green flash
 }
 
+
+
+uint8_t makeCommsStatusFlashes(uint8_t idx, comms_state_t cs, bool single)
+{   uint8_t c;
+
+    // 2 modes of operation .. system status (2 lines), running mode (1 line)
+    switch (cs)
+    {   case COMMS_INIT:
+        case COMMS_DISCONNECTED:
+            c = addLEDPattern(PROC_LED_WHITE, LED_FLASH_ON, 8, 16, NULL, idx);      // .5Sec on, 0.5Sec off (twice)
+            break;
+        case COMMS_AUTOBAUD:
+            c = addLEDPattern(PROC_LED_MAGENTA, LED_FLASH_ON, 8, 16, NULL, idx);    
+            break;
+        case COMMS_VISIBLE:
+            c = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_ON, 8, 16, NULL, idx);    
+            break;
+        case COMMS_ADOPTING: 
+            c = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_ON, 8, 16, NULL, idx);    
+            break;
+        case COMMS_FOSTERED:
+            c = addLEDPattern(PROC_LED_YELLOW_GREEN, LED_FLASH_ON, 8, 16, NULL, idx);
+            break;
+        case COMMS_ONLINE:
+            c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_ON, 8, 16, NULL, idx);    
+            break;
+        case COMMS_ERROR:
+        default:
+            c = addLEDPattern(PROC_LED_RED, LED_FLASH_ON, 8, 16, NULL, idx);
+            break;
+    }
+
+    if (single == false)
+    {   c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_ON, 8, 16, NULL, c);     }
+
+    return(c);
+}
+
+uint8_t makePumpStatusFlashes(uint8_t idx, pump_state_t ps, bool single)
+{   uint8_t c;
+
+    // 2 modes of operation .. system status (2 lines), running mode (1 line)
+    switch (pump.pump_state & 0x0F)
+    {   case PUMP_STATE_IDLE:
+            c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_ON, 8, 16, NULL, idx);    
+            break;
+        case PUMP_STATE_CALL:
+            c = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_ON, 8, 16, NULL, idx);
+            break;
+        case PUMP_STATE_AUTH:
+            c = addLEDPattern(PROC_LED_CYAN, LED_FLASH_ON, 8, 16, NULL, idx);    
+            break;
+        case PUMP_STATE_BUSY:
+            c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_ON, 8, 16, NULL, idx);    
+            break;        
+        case PUMP_STATE_OR_LEAK:
+            c = addLEDPattern(PROC_LED_VIOLET, LED_FLASH_ON, 8, 16, NULL, idx);    
+            break;        
+        case PUMP_STATE_OR_TRANS:
+            c = addLEDPattern(PROC_LED_MAGENTA, LED_FLASH_ON, 8, 16, NULL, idx);    
+            break;        
+        case PUMP_STATE_PAY:
+            c = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_ON, 8, 16, NULL, idx);    
+            break;        
+        case PUMP_STATE_STOP:
+            c = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_ON, 8, 16, NULL, idx);    
+            break;        
+        case PUMP_STATE_ERROR:
+        default:
+            c = addLEDPattern(PROC_LED_RED, LED_FLASH_ON, 8, 16, NULL, idx);
+            break;
+    }
+
+    if (single == false)
+    {   c = addLEDPattern(PROC_LED_VIOLET, LED_FLASH_ON, 8, 16, NULL, c);     }
+
+    return(c);
+}
 

@@ -6,15 +6,17 @@
 
 
 // states of pump->pump_state (low nibble)
-#define PUMP_STATE_IDLE     0          // Nozzle hung up and 
-#define PUMP_STATE_CALL     1          // Nozzle lifted
-#define PUMP_STATE_AUTH     2          // Pump has received and authorisation message but has not yet started
-#define PUMP_STATE_BUSY     3          // Pump has a transaction in process
-#define PUMP_STATE_OR_LEAK  4
-#define PUMP_STATE_OR_TRANS 5
-#define PUMP_STATE_PAY      6          // Pump is paying off .. i.e. transaction stopped 
-#define PUMP_STATE_STOP     7          // Pump transaction has stopped
-#define PUMP_STATE_ERROR    0x0F
+typedef enum {
+    PUMP_STATE_IDLE = 0,          // Nozzle hung up and 
+    PUMP_STATE_CALL = 1,          // Nozzle lifted
+    PUMP_STATE_AUTH = 2,          // Pump has received and authorisation message but has not yet started
+    PUMP_STATE_BUSY = 3,          // Pump has a transaction in process
+    PUMP_STATE_OR_LEAK = 4,
+    PUMP_STATE_OR_TRANS = 5,
+    PUMP_STATE_PAY = 6,          // Pump is paying off .. i.e. transaction stopped 
+    PUMP_STATE_STOP = 7,          // Pump transaction has stopped
+    PUMP_STATE_ERROR = 0x0F
+} pump_state_t;
 
 #define DDPC_INIT_MAGIC_NUM 0xA5        // a magic number to save into the system struct to determine if we've ever run (and if Flash is valid)
 #define NUM_DEV_TYPES       4
@@ -157,7 +159,7 @@ typedef struct
     uint32_t curr_pulses;           // Pulse count shadow of the Timer/Counter
 
     // the pump logical device
-    uint8_t pump_state;             // internal state of the pump (drives the state machine)
+    pump_state_t pump_state;             // internal state of the pump (drives the state machine)
     uint32_t transaction_count;     
 
     uint32_t timer;
@@ -240,16 +242,5 @@ void update_temp(void);
 void do_factory_default(bool SuperDflt);
 void pump_action_cmd(pump_controller_t *this_pump, uint8_t cmd);
 void pump_change_state(pump_controller_t *this_pump, uint8_t new_state, uint32_t timeout);
-
-
-
-
-
-
-
-
-
-
-
 
 #endif // DF_APPLICATION_H__

@@ -157,17 +157,22 @@ ret_code_t ConsoleSerialPortInit(void);
  * */
 size_t ConsoleWrite(char *buf, uint8_t count);
 
+/**
+ * @brief Routine to handle a new comms packet
+  *
+ * @param  nothing
+ * @retval no return
+ */
+void handle_new_console_packet(void);
 
 /**
- * @brief Function to make comms status flash pattern based on the current comms state
- *
- * @param idx       feed-in flash pattern index
- * @param * buf         pointer to a character buffer holding the data to send
- * @param count         number of characters to send
- * @return          Standard error code.
- * */
-uint8_t makeCommsStatusFlashes(uint8_t idx, uint8_t commsStatus);
-// void comms_clear(void);
+ * @brief Check if there a new comms packet available
+  *
+ * @param  none
+ * @retval is there a new packet available
+ */
+bool got_new_console_packet(void);
+
 
 
 #endif // DF_CONSOLE_COMMS_H__

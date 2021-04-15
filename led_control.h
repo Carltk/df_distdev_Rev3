@@ -8,7 +8,8 @@
 #include "nrfx_i2s.h"
 
 #include "hardware_init.h"
-
+#include "console_comms.h"
+#include "application.h"
 
 /*
 * New LED controller uses the WS2812C - programmable RGB LED
@@ -47,25 +48,28 @@ This is controlled by a stack of data structures
 
 extern const uint8_t PROC_LED_RED[];
 extern const uint8_t PROC_LED_GREEN[];
+extern const uint8_t PROC_LED_YELLOW_GREEN[];
 extern const uint8_t PROC_LED_ORANGE[];
 extern const uint8_t PROC_LED_YELLOW[];
 extern const uint8_t PROC_LED_CYAN[];
 extern const uint8_t PROC_LED_BLUE[];
 extern const uint8_t PROC_LED_MAGENTA[];
+extern const uint8_t PROC_LED_VIOLET[];
 extern const uint8_t PROC_LED_WHITE[];
 
+// LED flash patterns. This is a rolling buffer of bits. Each bit dwells for 1/8 second i.e. F denotes 1/2 second 
 
-typedef enum LED_FLASH
+typedef enum LED_FLASH                      
 {   LED_FLASH_OFF =     0x00000000,
     LED_FLASH_ON =      0xFFFFFFFF,
     LED_FLASH_FAST =    0xAAAAAAAA,
-    LED_FLASH_MED =     0xF0F0F0F0,
-    LED_FLASH_SLOW =    0xFF00FF00,
+    LED_FLASH_MED =     0x0F0F0F0F,
+    LED_FLASH_SLOW =    0x00FF00FF,
     LED_FLASH_BLIP =    0x01010101,
     LED_FLASH_SPARSE =  0x00010001,
-    LED_SINGLE_FLASH =  0xF0000000,
-    LED_DOUBLE_FLASH =  0xF0F00000,
-    LED_TRIPLE_FLASH =  0xF0F0F000,
+    LED_SINGLE_FLASH =  0x0000000F,
+    LED_DOUBLE_FLASH =  0x00000F0F,
+    LED_TRIPLE_FLASH =  0x000F0F0F,
 } led_flash_pattern_t;
 
 typedef struct
@@ -74,8 +78,6 @@ typedef struct
     uint8_t cycleDwellCount;       // Countdown for the cycle dwell countdown (at 0 rolls on to the next slot) 
     uint8_t slotTimeLeft;          // Countdown for the slot timeout (at 0 the slot is deleted) 
 } procled_status_t;
-
-
 
 typedef struct
 {   bool inUse;
@@ -86,6 +88,7 @@ typedef struct
     uint8_t slotTimeout;            // Count of how long before deleting itself (max = 255 / 8 =~ 30Sec) 
 
     uint8_t  linkNext;              // index of the next structure (0xFF to just use index-next)
+    uint32_t (*p_run_after_dwell)();    // pointer to a function to run on cycleDwell timeout (NULL to disable)
 
     procled_status_t status;        // Status of this procled slot
 } proc_led_t;
@@ -121,12 +124,12 @@ void wipeAllLEDSlots(void);
  * @param[in] flashPattern - the flash pattern mask for the led use one of LED_FLASH_<xxx>
  * @param[in] cycleDwell - how many 1/8 time slices to stay before moving to the next pattern
  * @param[in] slotTimeout - how many 1/8 time slices to exist before automatic deletion of the slot
+ * @param[in] p_func - pointer to a function to run on dwell timeout of this slot
  * @param[in] link - index into the procled[] array to service next once this slot's cycleDwell times out
  * @param[out] thisSlot - the slot in the procled[] array that this data was stored in
  *
  */
-uint8_t addLEDPattern(const uint8_t * colourAry, uint32_t flashPattern, uint8_t cycleDwell, uint8_t slotTimeout, uint8_t link);
-
+uint8_t addLEDPattern(const uint8_t * colourAry, uint32_t flashPattern, uint8_t cycleDwell, uint8_t slotTimeout, void * p_func, uint8_t link);
 
 /**
  * @brief Function to create a LED flash pattern closed loop.
@@ -151,5 +154,34 @@ uint8_t clearLEDSlot(uint8_t Idx);
  * @param[in] if value is supplied, copy it into procled_current (set to 0xFF to use current value of procled_current)
 */
 void ledNewValPoke(uint8_t Idx);
+
+/**
+ * @brief Function to set up standard operating mode system flashes
+ * 
+ *
+ * @param[in] no value
+*/
+static void setLEDSystemStatus(void);
+
+
+/**
+ * @brief Function to make comms status flash pattern based on the current comms state
+ *
+ * @param idx       feed-in flash pattern index for chaining
+ * @param single    single mode (for run-mode) or dual-line for system status
+ * @param cs        comms state to signal via LED
+ * @return          feed-out index for chaining
+ * */
+uint8_t makeCommsStatusFlashes(uint8_t idx, comms_state_t cs, bool single);
+
+/**
+ * @brief Function to make pump status flash pattern based on the current pump state
+ *
+ * @param idx       feed-in flash pattern index for chaining
+ * @param single    single mode (for run-mode) or dual-line for system status
+ * @param ps        pump state to signal via LED
+ * @return          feed-out index for chaining
+ * */
+uint8_t makePumpStatusFlashes(uint8_t idx, pump_state_t ps, bool single);
 
 #endif // DF_LED_CONTROL_H__

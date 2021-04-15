@@ -130,6 +130,11 @@ typedef struct {
     size_t packet_length;
     bool checksum_ok;
     bool tx_reflection;
+
+    // Temporary vaars
+    uint32_t SOH_ms;         // TODO Remove this
+    uint32_t EOF_ms;         // TODO Remove this
+
 } df_packet_ctl_t;
 
 
@@ -140,6 +145,7 @@ typedef struct {
     uint32_t err_cnt;
     uint32_t good_packets;
     uint32_t total_packets;
+    uint32_t elapsed_ms;     // TODO Remove this
 } df_packet_stats_t;
 
 typedef struct {
@@ -298,6 +304,15 @@ void clear_packet_stats(const nrf_libuarte_drv_t * const p_libuarte);
  * @retval df_packet_ctl_t* - Pointer to the packet control structure
  */
 df_packet_ctl_t * get_packet_control(const nrf_libuarte_drv_t * const p_libuarte);
+
+/**
+ * @brief Clear the contents of the libuarte packet control structure (the part that describes the packet)
+ *  i.e. size of packet, checksumOK, TxReflection
+ *
+ * @param  p_libuarte Pointer to libuarte instance.
+ * @retval void
+ */
+void clr_pkt_ctl(const nrf_libuarte_drv_t * const p_libuarte);
 
 
 /** @} */
