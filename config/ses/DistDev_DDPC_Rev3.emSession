@@ -1,15 +1,12 @@
 <!DOCTYPE CrossStudio_Session_File>
 <session>
  <Bookmarks>
-  <BookmarkItem objectName="" line="233" column="63" path="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" number="2" extra="if (ddpc.nv_immediate.dev_address &amp; 0xFF00) // and only if we haven't got a real (adopted) address" color="5"/>
-  <BookmarkItem objectName="" line="318" column="16" path="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" number="1" extra="else" color="5"/>
+  <BookmarkItem objectName="" line="243" column="63" path="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" number="2" extra="if (ddpc.nv_immediate.dev_address &amp; 0xFF00) // and only if we haven't got a real (adopted) address" color="5"/>
+  <BookmarkItem objectName="" line="328" column="16" path="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" number="1" extra="else" color="5"/>
  </Bookmarks>
  <Breakpoints groups="Breakpoints" active_group="Breakpoints">
-  <BreakpointListItem trigger="" line="278" counter="0" hardwareBreakpoint="" isFunctionBreakpoint="false" action="" expression="" group="Breakpoints" type="Breakpoint" state="2" filename="../../libraries/df_libuarte_drv.c" useHWbreakpoint="false"/>
   <BreakpointListItem trigger="" line="323" counter="0" hardwareBreakpoint="" isFunctionBreakpoint="false" action="" expression="" group="Breakpoints" type="Breakpoint" state="2" filename="../../../modules/nrfx/drivers/src/nrfx_uart.c" useHWbreakpoint="false"/>
   <BreakpointListItem trigger="" line="464" counter="0" hardwareBreakpoint="" isFunctionBreakpoint="false" action="" expression="" group="Breakpoints" type="Breakpoint" state="2" filename="../../../modules/nrfx/drivers/src/nrfx_uart.c" useHWbreakpoint="false"/>
-  <BreakpointListItem trigger="" line="601" counter="0" hardwareBreakpoint="" isFunctionBreakpoint="false" action="" expression="" group="Breakpoints" type="Breakpoint" state="2" filename="../../../modules/nrfx/drivers/src/nrfx_uart.c" useHWbreakpoint="false"/>
-  <BreakpointListItem trigger="" line="632" counter="0" hardwareBreakpoint="" isFunctionBreakpoint="false" action="" expression="" group="Breakpoints" type="Breakpoint" state="2" filename="../../../modules/nrfx/drivers/src/nrfx_uart.c" useHWbreakpoint="false"/>
   <Exceptions set="MemManage;UsageFault_Coprocessor;UsageFault_CheckingError;UsageFault_StateError;BusFault;ExceptionEntryReturnFault;HardFault"/>
  </Breakpoints>
  <ExecutionProfileWindow/>
@@ -72,26 +69,27 @@
   <Watches active="0" update="Never"/>
  </Watch4>
  <Files>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="85" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../main.c" selected="0" top="69" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="85" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../main.c" selected="1" top="68" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="244" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" useBinaryEdit="0" left="0" path="../../application.h" selected="0" top="0" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="219" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/main.c" useBinaryEdit="0" left="0" path="../../application.c" selected="0" top="298" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="90" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" useBinaryEdit="0" left="0" path="../../hardware_init.h" selected="0" top="181" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="413" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/libraries/df_libuarte_drv.c" useBinaryEdit="0" left="0" path="../../hardware_init.c" selected="0" top="386" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="924" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" useBinaryEdit="0" left="0" path="../config/sdk_config.h" selected="0" top="898" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="170" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" useBinaryEdit="0" left="0" path="../../console_comms.h" selected="0" top="147" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="598" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/application.c" useBinaryEdit="0" left="0" path="../../console_comms.c" selected="0" top="582" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="27" y="64" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" useBinaryEdit="0" left="0" path="../../led_control.h" selected="0" top="43" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="253" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" useBinaryEdit="0" left="0" path="../../led_control.c" selected="0" top="232" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="137" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/main.c" useBinaryEdit="0" left="0" path="../../application.c" selected="0" top="129" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="22" y="115" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/application.c" useBinaryEdit="0" left="0" path="../../hardware_init.h" selected="0" top="108" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="4" y="156" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/libraries/df_libuarte_drv.c" useBinaryEdit="0" left="0" path="../../hardware_init.c" selected="0" top="140" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="4182" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" useBinaryEdit="0" left="0" path="../config/sdk_config.h" selected="0" top="4164" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="19" y="68" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" useBinaryEdit="0" left="0" path="../../console_comms.h" selected="0" top="54" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="150" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/application.c" useBinaryEdit="0" left="0" path="../../console_comms.c" selected="0" top="128" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="195" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" useBinaryEdit="0" left="0" path="../../led_control.h" selected="0" top="167" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="34" y="283" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/hardware_init.c" useBinaryEdit="0" left="0" path="../../led_control.c" selected="0" top="258" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="16" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../analog.c" selected="0" top="0" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="49" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../notes.txt" selected="0" top="34" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="147" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" useBinaryEdit="0" left="0" path="../../libraries/df_libuarte_drv.h" selected="0" top="122" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="279" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" useBinaryEdit="0" left="0" path="../../libraries/df_libuarte_drv.c" selected="1" top="301" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="496" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/libraries/df_libuarte_drv.c" useBinaryEdit="0" left="0" path="../../../modules/nrfx/drivers/src/nrfx_uart.c" selected="0" top="478" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="17" y="143" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" useBinaryEdit="0" left="0" path="../../libraries/df_libuarte_drv.h" selected="0" top="261" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="28" y="304" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" useBinaryEdit="0" left="0" path="../../libraries/df_libuarte_drv.c" selected="0" top="284" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="52" y="605" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/libraries/df_libuarte_drv.c" useBinaryEdit="0" left="0" path="../../../modules/nrfx/drivers/src/nrfx_uart.c" selected="0" top="562" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="0" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/modules/nrfx/drivers/src/nrfx_uart.c" useBinaryEdit="0" left="0" path="../../../modules/nrfx/drivers/include/nrfx_uart.h" selected="0" top="0" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="201" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/libraries/df_libuarte_drv.c" useBinaryEdit="0" left="0" path="../../../modules/nrfx/hal/nrf_uart.h" selected="0" top="183" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="219" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../../components/libraries/util/app_util.h" selected="0" top="189" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="0" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../df_routines.c" selected="0" top="27" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="186" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../../components/libraries/timer/app_timer2.c" selected="0" top="167" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="286" useTextEdit="1" openedFrom="D:/MyDev/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/console_comms.c" useBinaryEdit="0" left="0" path="../../../components/libraries/log/nrf_log.h" selected="0" top="266" codecName="Default"/>
  </Files>
  <ARMCrossStudioWindow activeProject="DistDev_DDPC_Rev3" fileDialogDefaultFilter="*.c;*.cpp;*.cxx;*.cc;*.h;*.hpp;*.hxx" autoConnectTarget="J-Link" buildConfiguration="Debug" sessionSettings="" debugSearchFileMap="" fileDialogInitialDirectory="/home/carl/mydev/Projects/Nordic/nRF52840_DistDev/df_distdev_DDPCP_Rev3/config/boards" debugSearchPath="" autoConnectCapabilities="3711"/>
 </session>

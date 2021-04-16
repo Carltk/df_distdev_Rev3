@@ -173,6 +173,13 @@ void handle_new_console_packet(void);
  */
 bool got_new_console_packet(void);
 
+/**
+ * @brief A time-based (from the app timer) tick for Comms-related tasks
+  *
+ * @param  timer_val - the type of timeout trigger (100mS, 1S, 10S etc)
+ * @retval is there a new packet available
+ */
+void comms_timer_tick(uint8_t timer_val);
 
 
 #endif // DF_CONSOLE_COMMS_H__

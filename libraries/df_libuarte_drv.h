@@ -130,11 +130,6 @@ typedef struct {
     size_t packet_length;
     bool checksum_ok;
     bool tx_reflection;
-
-    // Temporary vaars
-    uint32_t SOH_ms;         // TODO Remove this
-    uint32_t EOF_ms;         // TODO Remove this
-
 } df_packet_ctl_t;
 
 
@@ -143,9 +138,9 @@ typedef struct {
     uint32_t SOH_cnt;
     uint32_t EOF_cnt;
     uint32_t err_cnt;
-    uint32_t good_packets;
-    uint32_t total_packets;
-    uint32_t elapsed_ms;     // TODO Remove this
+    uint32_t good_rx_packets;
+    uint32_t rx_packets;
+    uint32_t tx_packets;
 } df_packet_stats_t;
 
 typedef struct {
@@ -257,11 +252,12 @@ ret_code_t nrf_libuarte_drv_tx(const nrf_libuarte_drv_t * const p_libuarte,
  *        trigger to start receiving.
  *
  * @param p_libuarte      Pointer to libuarte instance.
+ * @param clearFlags      Flag to indicate clearing packet-assembly vars (SOH, STUFF, Count)
  *
  * @retval NRF_ERROR_INTERNAL  Error during PPI channel configuration.
  * @retval NRF_SUCCESS         Buffer set for receiving.
  */
-ret_code_t nrf_libuarte_drv_rx_start(const nrf_libuarte_drv_t * const p_libuarte);
+ret_code_t nrf_libuarte_drv_rx_start(const nrf_libuarte_drv_t * const p_libuarte, bool clearFlags);
 
 /**
  * @brief Function for stopping receiving data over UARTE.

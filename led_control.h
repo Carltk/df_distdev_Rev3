@@ -70,6 +70,9 @@ typedef enum LED_FLASH
     LED_SINGLE_FLASH =  0x0000000F,
     LED_DOUBLE_FLASH =  0x00000F0F,
     LED_TRIPLE_FLASH =  0x000F0F0F,
+    LED_3ON_1OFF =      0x77777777,
+    LED_6ON_2OFF =      0x3F3F3F3F,
+    LED_ESCALATE =      0x03F0F1CD,
 } led_flash_pattern_t;
 
 typedef struct
@@ -183,5 +186,13 @@ uint8_t makeCommsStatusFlashes(uint8_t idx, comms_state_t cs, bool single);
  * @return          feed-out index for chaining
  * */
 uint8_t makePumpStatusFlashes(uint8_t idx, pump_state_t ps, bool single);
+
+/**
+ * @brief Function to display the Identify pattern (triggered by Comms)
+ *
+ * @param           none
+ * @return          none
+ * */
+void setIdentLEDState(void);
 
 #endif // DF_LED_CONTROL_H__

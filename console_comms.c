@@ -1,7 +1,15 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "nrfx_log.h"
+
+#define NRF_LOG_MODULE_NAME ConComms
+// <0=> Off, <1=> Error, <2=> Warning, <3=> Info, <4=> Debug 
+#define NRF_LOG_LEVEL       3
+#define NRF_LOG_INFO_COLOR  0
+#define NRF_LOG_DEBUG_COLOR 0
+#include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
+
 
 #include "df_routines.h"
 #include "hardware_init.h"
@@ -29,6 +37,7 @@
 
 // *** vars and structures ***
 static uint16_t DevAddress = DISCOVERY_DFLT_ADDR;
+uint32_t last_comms_count;
 
 uint32_t baud_list[NUM_BAUD_RATES] = BAUD_LIST;
 
@@ -80,10 +89,10 @@ ret_code_t ConsoleSerialPortInit(void)
     con_comms.comms_state = COMMS_INIT;
     con_comms.rx_buf = pkt_buf;
 
-    con_comms.baud_index = 1;       // TODO - this value set to 19200 to test baud cycling .. default should be Console Default = 9600 (index 1)
+    con_comms.baud_index = 2;       // TODO - this value set to 19200 to test baud cycling .. default should be Console Default = 9600 (index 1)
     ret = PortInit(baud_list[con_comms.baud_index]);
 
-    NRFX_LOG_INFO("Serial (IntBus) Port - Initialised"); 
+    NRF_LOG_INFO("Serial (IntBus) Port - Initialised"); 
 
     con_comms.comms_state = COMMS_DISCONNECTED;
     return(ret);
@@ -108,41 +117,42 @@ ret_code_t PortInit(nrf_uart_baudrate_t baud)
 
     ret = nrf_libuarte_drv_init(&intbus, &nrf_libuarte_drv_config, &comms_evt_handler, NULL);
     if (ret != NRFX_SUCCESS)
-    {    NRFX_LOG_INFO("Serial init failure [%x]", ret);  }
-    
-    ret = nrf_libuarte_drv_rx_start(&intbus);                       // (re)enable the receiver    
-    if (ret != NRFX_SUCCESS)
-    {    NRFX_LOG_INFO("Serial start failure [%x]", ret);  }
+    {    NRF_LOG_INFO("Serial init failure [%x]", ret);  }
     
     return(ret);
 }
 
 void comms_timer_tick(uint8_t timer_val)
 {   // called by the application timer 
-    df_packet_stats_t * ps;
     
     switch(timer_val)
     {
         case APP_STATE_100MS:
+            // Every 100mS - do this in comms
             break;
         case APP_STATE_1S:
-            ps = get_packet_stats(&intbus);
+            {};                      // work around the "a label can only be part of a statement" compiler error
+            df_packet_stats_t * ps = get_packet_stats(&intbus);
 
-            NRFX_LOG_INFO("Comms Status: chars[%d], EOF[%d], err[%d], good packets[%d], total packets[%d], elapsed[%ld] ",
-                        ps->total_chars,
-                        ps->EOF_cnt,
-                        ps->err_cnt,
-                        ps->good_packets,
-                        ps->total_packets,
-                        ps->elapsed_ms);     // TODO Remove this;
+            if (con_comms.comms_state > COMMS_DISCONNECTED)     // there WAS comms
+            {   if ( (last_comms_count > 0) && (last_comms_count == ps->total_chars))   // .. but now no new Comms
+                {   NRF_LOG_INFO("Comms Status: COMMS HAS FROZEN");    
+                    nrf_libuarte_drv_rx_start(&intbus, true);                           // restart Comms Rx
+                    clear_packet_stats(&intbus);                                        // Clear cumulative packet stats
+                    con_comms.comms_state = COMMS_DISCONNECTED;
+                }
+            }
+            last_comms_count = ps->total_chars;
 
+            if ((con_comms.comms_state > COMMS_VISIBLE) && (ps->tx_packets == 0))
+            {   con_comms.comms_state = COMMS_VISIBLE;  }
+
+            NRF_LOG_DEBUG("Comms Status: chars[%d], EOF[%d], err[%d], good packets[%d], total packets[%d], tx packets[%d] ",
+                        ps->total_chars, ps->EOF_cnt, ps->err_cnt, ps->good_rx_packets, ps->rx_packets, ps->tx_packets);
             break;
         case APP_STATE_10S:
-            ps = get_packet_stats(&intbus);
-            if (ps->total_packets == 0)
-            {   nrf_libuarte_drv_rx_start(&intbus);  }
-
-            clear_packet_stats(&intbus);
+            clear_packet_stats(&intbus);                                                // Clear cumulative packet stats
+            last_comms_count = 0;
             break;
         default:
             break;
@@ -210,7 +220,7 @@ void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
 
             break;
         default:
-NRF_LOG_INFO("Comms: Unknown event [%x]", p_evt->type);                                               
+            NRF_LOG_INFO("Comms: Unknown event [%x]", p_evt->type);                                               
             break;
     }
 }
@@ -274,7 +284,7 @@ msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
                 memcpy(md->msg_buf, &rd->rx_buf[1], md->msg_char_count);        // All good .. copy the message into the msg_buf
 
                 md->msg_state = retval = MSG_OK;                                // and set the return value
-                NRF_LOG_INFO("Comms: Msg for me");
+                // NRF_LOG_INFO("Comms: Msg for me");
                 interpret_msg(md);
             }
             else
@@ -349,7 +359,7 @@ void interpret_msg(msg_data_t *md)
             break;
         // case FD_CMD_CS:                 // Fetch the KbdLCD Controller checksum
         case FD_CMD_LDAPP: 		// Load the new application and reset
-            NRFX_LOG_INFO("Unknown Command Rx [%x]", md->msg_buf[MSGBUF_COMMAND]);
+            NRF_LOG_INFO("Unknown Command Rx [%x]", md->msg_buf[MSGBUF_COMMAND]);
             break;
         case FD_CMD_DISCOVER:
             con_comms.discovery_temp_addr = buf2int(&md->msg_buf[MSGBUF_PAYLOAD]);    // Message contains the temporary address 0xFF<TempIndex> in payload (also capture the temporary address)
@@ -359,11 +369,11 @@ void interpret_msg(msg_data_t *md)
 
             int2buf(&buf[MSGBUF_ADDR], con_comms.discovery_temp_addr);                // we will respond FROM that message .. swap address payload into output address field
             
-            NRFX_LOG_INFO("DDPC Addr changed to [%x]", ddpc.nv_immediate.dev_address);
+            NRF_LOG_INFO("DDPC Addr changed to [%x]", ddpc.nv_immediate.dev_address);
             
             if ((buf[MSGBUF_TYPE] & 0xFE) == 0xFE)                  // If the message was TO Discovery or AllCall type
             {   buf[MSGBUF_TYPE] = ddpc.dev_type[0];                   // replace type with my primary type for the response message
-                NRFX_LOG_INFO("DDPC Type requested [%x]", buf[MSGBUF_TYPE]);
+                NRF_LOG_INFO("DDPC Type requested [%x]", buf[MSGBUF_TYPE]);
             }
 
             buf[char_cnt++] = ddpc.my_rnd;                          // add the system random number to the msg (makes collision-detection more obvious)
@@ -371,12 +381,7 @@ void interpret_msg(msg_data_t *md)
             break;
         case FD_CMD_IDENT:
             if (md->msg_buf[MSGBUF_PAYLOAD] & IDENT_LED)
-            {   wipeAllLEDSlots();
-                a = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_MED, 8, 32, NULL, 0xFF);
-                c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_MED, 8, 32, NULL, a);
-                c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_MED, 8, 32, NULL, c);
-                loopLEDPattern(a, c);
-            }
+            {   setIdentLEDState();     }
 
             if (md->msg_buf[MSGBUF_PAYLOAD] & IDENT_RELAY)
             {   if (pump.pump_state == PUMP_STATE_IDLE)         // Only init Relay test if the Pump controller is Idle
@@ -398,7 +403,7 @@ void interpret_msg(msg_data_t *md)
             }
             break;
         default:
-            NRFX_LOG_INFO("Unknown Command Rx [%x]", md->msg_buf[MSGBUF_COMMAND]);
+            NRF_LOG_INFO("Unknown Command Rx [%x]", md->msg_buf[MSGBUF_COMMAND]);
             break;
     }
 
@@ -413,7 +418,7 @@ uint8_t handle_action_cmd(msg_data_t *md, char *buf)
 {   uint8_t retval = 0;
     uint8_t cmd = md->msg_buf[MSGBUF_PAYLOAD];
 
-    NRFX_LOG_INFO("Action [%x] Received", cmd);
+    NRF_LOG_INFO("Action [%x] Received", cmd);
 
     switch (cmd)
     {   case PUMP_CMD_STATUS:                   // Request for Pump Status
@@ -565,7 +570,7 @@ size_t ConsoleWrite(char *buf, uint8_t count)
     tx_char_count = 0;
     struct nrf_serial_s const * tp_serial;
 
-    NRF_LOG_INFO("%ld - Comms: Sending Data (%d chars)", get_sys_ms(), count);
+    // NRF_LOG_INFO("%ld - Comms: Sending Data (%d chars)", get_sys_ms(), count);
    
     tx_buf[tx_char_count++] = SOH_CHAR;
 
@@ -602,7 +607,7 @@ ret_code_t swap_baud(const nrf_libuarte_drv_t * const p_libuarte)
 
     ret = PortInit(baud_list[con_comms.baud_index]);
     if (ret != NRFX_SUCCESS)
-    {    NRFX_LOG_INFO("Serial 1st init failure [%x]", ret);  }
+    {    NRF_LOG_INFO("Serial 1st init failure [%x]", ret);  }
 
     //nrf_uarte_baudrate_set(p_libuarte->uarte, baud_list[con_comms.baud_index]);
 

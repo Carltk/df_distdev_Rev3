@@ -92,8 +92,8 @@ void app_timer_handle(void * p_context)
 
                     break;
                 case APP_STATE_1S:
-                    if (hardware.pushbutton_time[0])            // Mode button released?
-                    {   handle_push_button();   }               // See how long it was pressed for and perform relevent actions
+                    if (hardware.pushbutton_time[0])            // if the mode button has a time-count
+                    {   handle_push_button();   }               // Check the current state for release / actions etc
 
                     if (pump.timer >= 0)   
                     {   pump.timer--;
@@ -144,14 +144,12 @@ void handle_push_button(void)
 {
     if (hardware.pushbutton[0] == 0)        // perform the actions when the button is released
     {   
-        NRFX_LOG_INFO("Button pressed for %d seconds", hardware.pushbutton_time[0] / 10);                   
+        NRFX_LOG_INFO("Button pressed for %d seconds", ((hardware.pushbutton_time[0] / 10) + 1));                   
         
-        switch (hardware.pushbutton_time[0] / 10)     // time is 100mS slices .. make seconds
+        switch ((hardware.pushbutton_time[0] / 10) + 1)     // time is 100mS slices .. make seconds
         {
             case 0: case 1:                     // 0-2 seconds
-                clearLEDSlot(mode_button_LED); 
                 makeSysStatusFlashes();                     // Make the system status stack
-                mode_button_LED = 0xFF;
                 break;
             case 2: case 3: case 4:             // 2-5 sec            
                 pump_clear_for_transaction(&pump);

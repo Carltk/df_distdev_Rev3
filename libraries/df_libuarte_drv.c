@@ -73,7 +73,11 @@ NRF_LOG_MODULE_REGISTER();
 #define RTS_PIN_DISABLED 0xff
 
 #define IN_CHAR_LEN     1
-static uint8_t in_char;
+static uint8_t in_char[IN_CHAR_LEN];
+
+#define IN_CHAR_ALT_LEN     10
+static uint8_t in_char_alt[IN_CHAR_ALT_LEN];
+
 
 // local function protoypes
 static void irq_handler(nrfx_uart_event_t const * p_event, void * p_context);
@@ -115,9 +119,7 @@ ret_code_t nrf_libuarte_drv_init(const nrf_libuarte_drv_t * const p_libuarte,
     uc.baudrate = p_config->baudrate;
     
     ret = nrfx_uart_init(&p_libuarte->uarta, &uc, irq_handler);
-    nrfx_uart_rx_enable(&p_libuarte->uarta);
-    nrfx_uart_rx(&p_libuarte->uarta, &in_char, IN_CHAR_LEN);
-
+    nrf_libuarte_drv_rx_start(p_libuarte, true);
 
     p_libuarte->ctrl_blk->enabled = true;
 
@@ -148,22 +150,25 @@ ret_code_t nrf_libuarte_drv_tx(const nrf_libuarte_drv_t * const p_libuarte,
     p_libuarte->ctrl_blk->tx_out_buf.size = len;
     p_libuarte->ctrl_blk->tx_cur_idx = 0;
 
+    p_libuarte->ctrl_blk->packet_stats.tx_packets += 1;
+
     if(p_libuarte->ctrl_blk->txen_pin != NRF_UART_PSEL_DISCONNECTED)
     {   nrf_gpio_pin_set(p_libuarte->ctrl_blk->txen_pin);    }          // turn on the TxEnable pin
 
-    NRF_LOG_WARNING("Started TX total length:%d", len);
+    NRF_LOG_DEBUG("Started TX total length:%d", len);
     ret = nrfx_uart_tx(&p_libuarte->uarta, p_data, len);
 
     return(ret);
 }
 
-ret_code_t nrf_libuarte_drv_rx_start(const nrf_libuarte_drv_t * const p_libuarte)
+ret_code_t nrf_libuarte_drv_rx_start(const nrf_libuarte_drv_t * const p_libuarte, bool clearFlags)
 {
-    /* Reset byte counting */
-    clr_buf_ctl(&p_libuarte->ctrl_blk->packet_ctl);
-
     nrfx_uart_rx_enable(&p_libuarte->uarta);
-    nrfx_uart_rx(&p_libuarte->uarta, &in_char, IN_CHAR_LEN);
+    nrfx_uart_rx(&p_libuarte->uarta, in_char, IN_CHAR_LEN);
+    nrfx_uart_rx(&p_libuarte->uarta, in_char_alt, IN_CHAR_ALT_LEN);
+    
+    if (clearFlags)
+    {   clr_buf_ctl(&p_libuarte->ctrl_blk->packet_ctl);  }
 
     return NRF_SUCCESS;
 }
@@ -237,11 +242,7 @@ static void irq_handler(nrfx_uart_event_t const * p_event, void * p_context)
     switch (p_event->type)
     {
         case NRFX_UART_EVT_TX_DONE:         // Tx finished 
-                // Do I need to move char by char into the TxBuf or is that handled already?
-                           // turn off the TxEnable pin
-               if(cb->txen_pin != NRF_UART_PSEL_DISCONNECTED)
-               {   nrf_gpio_pin_clear(cb->txen_pin);    }          // turn on the TxEnable pin
-
+               
                cb->tx_out_buf.p_data = NULL;
                cb->tx_out_buf.size = 0;
 
@@ -251,13 +252,20 @@ static void irq_handler(nrfx_uart_event_t const * p_event, void * p_context)
                         .rxtx = {.p_data = cb->tx_out_buf.p_data, .size = cb->tx_out_buf.size } 
                     } };
                cb->evt_handler(cb, &evt);
+
+               if(cb->txen_pin != NRF_UART_PSEL_DISCONNECTED)
+               {   nrf_gpio_pin_clear(cb->txen_pin);    }          // turn off the TxEnable pin
                
-               nrfx_uart_rx_enable(&ctxt->uarta);	                        
-               nrfx_uart_rx(&ctxt->uarta, &in_char, IN_CHAR_LEN);                // restart comms rx
-            
+               nrf_libuarte_drv_rx_start(ctxt, true);
             break;
         case NRFX_UART_EVT_RX_DONE:
             cb->packet_stats.total_chars += 1;
+            
+            /* if (p_event->data.rxtx.p_data == in_char_alt)       // if chars have been diverted to the alt-buffer
+            {   clr_buf_ctl(&cb->packet_ctl);                   // just dump the packet & wait for another SOH
+                break;
+            } */  
+            
             uint8_t char_in = *p_event->data.rxtx.p_data;
 
             if (cb->packet_ctl.got_stuff == true)       // Modify the next char if the last was a STUFF_CHAR
@@ -273,13 +281,7 @@ static void irq_handler(nrfx_uart_event_t const * p_event, void * p_context)
             cb->rx_in_buf.p_data[cb->packet_ctl.in_buf_ptr] = char_in;  // Save the char in the in_buf
             cb->packet_ctl.in_buf_ptr += 1;                             // and increment the in_buf pointer
 
-            if ((cb->packet_ctl.in_buf_ptr == 2) && (char_in == 0xFE))
-            {   
-                char_in = char_in | 0x80;   
-            }
-
-            nrfx_uart_rx_enable(&ctxt->uarta);	            
-            nrfx_uart_rx(&ctxt->uarta, &in_char, IN_CHAR_LEN);         // restart comms rx
+            nrf_libuarte_drv_rx_start(ctxt, false);     // restart comms (but don't clear packet-assembly vars)
 
             if (char_in == SOH_CHAR)  
             {   cb->packet_stats.SOH_cnt += 1;
@@ -288,24 +290,18 @@ static void irq_handler(nrfx_uart_event_t const * p_event, void * p_context)
 
                 cb->rx_in_buf.p_data[cb->packet_ctl.in_buf_ptr] = char_in;  // Save the char in the in_buf
                 cb->packet_ctl.in_buf_ptr += 1;                             // and increment the in_buf pointer
-
-                cb->packet_ctl.SOH_ms = get_sys_ms();        // TODO Remove this
             }
             else
             {   if (cb->packet_ctl.got_SOH)
                 {   if (char_in == EOF_CHAR)                // packet finished .. bundle packet up to application layer
                     {   cb->packet_stats.EOF_cnt += 1;
-                        cb->packet_stats.total_packets += 1;
+                        cb->packet_stats.rx_packets += 1;
 
                         cb->packet_ctl.packet_length = cb->packet_ctl.in_buf_ptr;       // in_buf_ptr is already increment to an effective count
-    
-                        cb->packet_ctl.EOF_ms = get_sys_ms();       // TODO Remove this
-                        cb->packet_stats.elapsed_ms = cb->packet_ctl.EOF_ms - cb->packet_ctl.SOH_ms;      // TODO Remove this
-
                         memcpy(cb->packet_buf.p_data, cb->rx_in_buf.p_data, cb->packet_ctl.packet_length);   // Move the packet from in_buf to packet_buf
 
                         if (is_checksum_ok(cb->packet_buf.p_data, cb->packet_ctl.packet_length))
-                        {   cb->packet_stats.good_packets += 1;
+                        {   cb->packet_stats.good_rx_packets += 1;
                             cb->packet_ctl.checksum_ok = true;
                         }
 
@@ -344,10 +340,13 @@ static void irq_handler(nrfx_uart_event_t const * p_event, void * p_context)
                     };
             cb->evt_handler(&cb, &err_evt);
             
-            nrfx_uart_rx_enable(&ctxt->uarta);	                        
-            nrfx_uart_rx(&ctxt->uarta, &in_char, IN_CHAR_LEN);                // restart comms rx
+            nrf_libuarte_drv_rx_start(ctxt, true);
+
             break;
         default:
+            clr_buf_ctl(&cb->packet_ctl);
+            nrf_libuarte_drv_rx_start(ctxt, true);
+
             break;
     }
 

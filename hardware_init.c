@@ -34,7 +34,6 @@ void rng_handler(uint8_t rng_data);
 // Variables
 const nrfx_rng_config_t rng = NRFX_RNG_DEFAULT_CONFIG;          // Random number generator
 hardware_t hardware;                    // Hardware shadow
-uint8_t mode_button_LED = 0xFF;         // Holder for the mode button LED flash slot (so it can be cancelled) 
 
 ret_code_t df_hardware_init(void)
 {   ret_code_t ret = NRF_SUCCESS;
@@ -147,17 +146,16 @@ void df_nozzle_handler(uint8_t pin_no, uint8_t button_action)
 }
 
 void df_mode_handler(uint8_t pin_no, uint8_t button_action)
-{   
-
+{   uint8_t a;
     NRFX_LOG_INFO("Mode pin_no [%d] State [%x]", pin_no, button_action);                     
     
     if (button_action)
-    {   mode_button_LED = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_MED, 120, 120, NULL, 0xFF);     // Start a 1sec flash in yellow
-        loopLEDPattern(mode_button_LED, mode_button_LED);                                     // change the linkNext pointer to itself
-        ledNewValPoke(mode_button_LED);                                                                      // Force the new value into the LED display  
+    {   wipeAllLEDSlots();
+        a = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_MED, 120, 120, NULL, 0xFF);     // Start a 1sec flash in yellow
+        loopLEDPattern(a, a);                                                       // change the linkNext pointer to itself
     }
     
-    for (uint8_t i=0;i<NUM_PBS;i++)                         // The mode button handler is in the application timer handler so that different hold-times can be determined
+    for (uint8_t i=0;i<NUM_PBS;i++)                                                 // The mode button handler is in the application timer handler so that different hold-times can be determined
     {   if (hardware.pushbutton_pin[i] = pin_no) 
         {   hardware.pushbutton[i] = button_action; 
             NRFX_LOG_INFO("Mode Button [%d] State [%x]", i, button_action);             

@@ -252,10 +252,10 @@ static void setLEDSystemStatus()
             // 
         // 3 - pump state
     // Add patterns backwards
-    a = addLEDPattern(PROC_LED_WHITE, LED_FLASH_OFF, 4, 8, setLEDSystemStatus, 0xFF);   // just a place-holder (1/8 sec) for the reload routine
+    a = addLEDPattern(PROC_LED_WHITE, LED_FLASH_OFF, 8, 16, setLEDSystemStatus, 0xFF);   // just a place-holder (1/8 sec) for the reload routine
     c = makePumpStatusFlashes(a, pump.pump_state, true);
     c = makeCommsStatusFlashes(c, con_comms.comms_state, true);
-    c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_ON, 8, 16, NULL, c);      // Green 0.5S ON, 0.5S OFF. cycle every 2S, Never timeout, link next     
+    c = addLEDPattern(PROC_LED_GREEN, LED_6ON_2OFF, 8, 16, NULL, c);      // Green 0.5S ON, 0.5S OFF. cycle every 2S, Never timeout, link next     
     //c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_MED, 32, 0xFF, NULL, 0xFF);      // Green 0.5S ON, 0.5S OFF. cycle every 2S, Never timeout, link next     
     loopLEDPattern(a, c);
 }
@@ -274,6 +274,16 @@ static void setStartupLEDState(void)
     c = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_ON, 2, 4, NULL, c);
     c = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_ON, 2, 4, NULL, c);
     c = addLEDPattern(PROC_LED_RED, LED_FLASH_ON, 2, 4, NULL, c);      // Red, ON, dwell=2/8S, delete=2/8S
+    loopLEDPattern(a, c);
+}
+
+void setIdentLEDState(void)
+{   uint8_t a, c;
+    wipeAllLEDSlots();
+                
+    a = addLEDPattern(PROC_LED_RED, LED_ESCALATE, 32, 64, NULL, 0xFF);
+    c = addLEDPattern(PROC_LED_GREEN, LED_ESCALATE, 32, 64, NULL, a);
+    c = addLEDPattern(PROC_LED_BLUE, LED_ESCALATE, 32, 64, NULL, c);
     loopLEDPattern(a, c);
 }
 
@@ -349,26 +359,26 @@ uint8_t makeCommsStatusFlashes(uint8_t idx, comms_state_t cs, bool single)
     switch (cs)
     {   case COMMS_INIT:
         case COMMS_DISCONNECTED:
-            c = addLEDPattern(PROC_LED_WHITE, LED_FLASH_ON, 8, 16, NULL, idx);      // .5Sec on, 0.5Sec off (twice)
+            c = addLEDPattern(PROC_LED_WHITE, LED_6ON_2OFF, 8, 16, NULL, idx);      // .5Sec on, 0.5Sec off (twice)
             break;
         case COMMS_AUTOBAUD:
-            c = addLEDPattern(PROC_LED_MAGENTA, LED_FLASH_ON, 8, 16, NULL, idx);    
+            c = addLEDPattern(PROC_LED_MAGENTA, LED_6ON_2OFF, 8, 16, NULL, idx);    
             break;
         case COMMS_VISIBLE:
-            c = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_ON, 8, 16, NULL, idx);    
+            c = addLEDPattern(PROC_LED_YELLOW, LED_6ON_2OFF, 8, 16, NULL, idx);    
             break;
         case COMMS_ADOPTING: 
-            c = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_ON, 8, 16, NULL, idx);    
+            c = addLEDPattern(PROC_LED_ORANGE, LED_6ON_2OFF, 8, 16, NULL, idx);    
             break;
         case COMMS_FOSTERED:
-            c = addLEDPattern(PROC_LED_YELLOW_GREEN, LED_FLASH_ON, 8, 16, NULL, idx);
+            c = addLEDPattern(PROC_LED_YELLOW_GREEN, LED_6ON_2OFF, 8, 16, NULL, idx);
             break;
         case COMMS_ONLINE:
-            c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_ON, 8, 16, NULL, idx);    
+            c = addLEDPattern(PROC_LED_GREEN, LED_6ON_2OFF, 8, 16, NULL, idx);    
             break;
         case COMMS_ERROR:
         default:
-            c = addLEDPattern(PROC_LED_RED, LED_FLASH_ON, 8, 16, NULL, idx);
+            c = addLEDPattern(PROC_LED_RED, LED_6ON_2OFF, 8, 16, NULL, idx);
             break;
     }
 
@@ -384,37 +394,37 @@ uint8_t makePumpStatusFlashes(uint8_t idx, pump_state_t ps, bool single)
     // 2 modes of operation .. system status (2 lines), running mode (1 line)
     switch (pump.pump_state & 0x0F)
     {   case PUMP_STATE_IDLE:
-            c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_ON, 8, 16, NULL, idx);    
+            c = addLEDPattern(PROC_LED_GREEN, LED_6ON_2OFF, 8, 16, NULL, idx);    
             break;
         case PUMP_STATE_CALL:
-            c = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_ON, 8, 16, NULL, idx);
+            c = addLEDPattern(PROC_LED_ORANGE, LED_6ON_2OFF, 8, 16, NULL, idx);
             break;
         case PUMP_STATE_AUTH:
-            c = addLEDPattern(PROC_LED_CYAN, LED_FLASH_ON, 8, 16, NULL, idx);    
+            c = addLEDPattern(PROC_LED_CYAN, LED_6ON_2OFF, 8, 16, NULL, idx);    
             break;
         case PUMP_STATE_BUSY:
-            c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_ON, 8, 16, NULL, idx);    
+            c = addLEDPattern(PROC_LED_BLUE, LED_6ON_2OFF, 8, 16, NULL, idx);    
             break;        
         case PUMP_STATE_OR_LEAK:
-            c = addLEDPattern(PROC_LED_VIOLET, LED_FLASH_ON, 8, 16, NULL, idx);    
+            c = addLEDPattern(PROC_LED_VIOLET, LED_6ON_2OFF, 8, 16, NULL, idx);    
             break;        
         case PUMP_STATE_OR_TRANS:
-            c = addLEDPattern(PROC_LED_MAGENTA, LED_FLASH_ON, 8, 16, NULL, idx);    
+            c = addLEDPattern(PROC_LED_MAGENTA, LED_6ON_2OFF, 8, 16, NULL, idx);    
             break;        
         case PUMP_STATE_PAY:
-            c = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_ON, 8, 16, NULL, idx);    
+            c = addLEDPattern(PROC_LED_YELLOW, LED_6ON_2OFF, 8, 16, NULL, idx);    
             break;        
         case PUMP_STATE_STOP:
-            c = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_ON, 8, 16, NULL, idx);    
+            c = addLEDPattern(PROC_LED_ORANGE, LED_6ON_2OFF, 8, 16, NULL, idx);    
             break;        
         case PUMP_STATE_ERROR:
         default:
-            c = addLEDPattern(PROC_LED_RED, LED_FLASH_ON, 8, 16, NULL, idx);
+            c = addLEDPattern(PROC_LED_RED, LED_6ON_2OFF, 8, 16, NULL, idx);
             break;
     }
 
     if (single == false)
-    {   c = addLEDPattern(PROC_LED_VIOLET, LED_FLASH_ON, 8, 16, NULL, c);     }
+    {   c = addLEDPattern(PROC_LED_VIOLET, LED_6ON_2OFF, 8, 16, NULL, c);     }
 
     return(c);
 }
