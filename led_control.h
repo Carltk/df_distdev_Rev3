@@ -72,7 +72,7 @@ typedef enum LED_FLASH
     LED_TRIPLE_FLASH =  0x000F0F0F,
     LED_3ON_1OFF =      0x77777777,
     LED_6ON_2OFF =      0x3F3F3F3F,
-    LED_ESCALATE =      0x03F0F1CD,
+    LED_ESCALATE =      0x3F7CF399,
 } led_flash_pattern_t;
 
 typedef struct

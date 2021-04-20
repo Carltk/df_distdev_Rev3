@@ -47,6 +47,7 @@
 
 #include "sdk_errors.h"
 #include "nrfx_uart.h"
+#include "nrfx_ppi.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -68,9 +69,21 @@
 #define STUFF_CHAR      0xD0
 #define SOH_CHAR        0xD1
 #define EOF_CHAR        0xD2
+#define EOF_CHAR        0xD2
 #define MSG_DELIM       0xD3
 #define MSG_MIN_SIZE    5
 #define START_LRC_CALC  1  
+
+/**
+ * @brief PPI channels used by libuarte
+ */
+typedef enum {
+    NRF_LIBUARTE_DRV_PPI_CH_ENDRX_STARTRX,
+    NRF_LIBUARTE_DRV_PPI_CH_RXERR_STARTRX,
+    NRF_LIBUARTE_DRV_PPI_CH_RXTO_STARTRX,
+    NRF_LIBUARTE_DRV_PPI_CH_MAX
+} nrf_libuarte_drv_ppi_channel_t;
+
 
 typedef enum                            // Usage of counter-compare Channels in the Timer/Counter
 {   DF_COUNT_CHAN_RXD_CHARS = 0,        
@@ -144,6 +157,8 @@ typedef struct {
 } df_packet_stats_t;
 
 typedef struct {
+    nrf_ppi_channel_t ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_MAX];
+
     uint32_t  txen_pin;                         // The Transmit Enable pin
     
     // Tx buffer management
@@ -167,7 +182,7 @@ typedef struct {
 
 typedef struct {
     nrf_libuarte_drv_ctrl_blk_t * ctrl_blk;
-    nrfx_uart_t const uarta;
+    nrfx_uart_t const uart;
 } nrf_libuarte_drv_t;
 
 
@@ -192,7 +207,7 @@ typedef struct {
     static nrf_libuarte_drv_ctrl_blk_t CONCAT_2(_name, ctrl_blk);           \
     static const nrf_libuarte_drv_t _name = {                               \
         .ctrl_blk = &CONCAT_2(_name, ctrl_blk),                             \
-        .uarta = {                                                          \
+        .uart = {                                                          \
             .p_reg = &CONCAT_2(NRF_UART, _uarte_idx),                       \
             .drv_inst_idx = _uarte_idx                                      \
         }                                                                   \
@@ -206,7 +221,7 @@ typedef struct {
     static nrf_libuarte_drv_ctrl_blk_t CONCAT_2(_name, ctrl_blk);           \
     static const nrf_libuarte_drv_t _name = {                               \
         .ctrl_blk = &CONCAT_2(_name, ctrl_blk),                             \
-        .uarta = NRFX_UART_INSTANCE(_uarte_idx),                            \
+        .uart = NRFX_UART_INSTANCE(_uarte_idx),                            \
     }
 
 
@@ -241,7 +256,6 @@ void nrf_libuarte_drv_uninit(const nrf_libuarte_drv_t * const p_libuarte);
  * @param[in] len        Number of bytes to send.
  *
  * @retval NRF_ERROR_BUSY      Data is transferring.
- * @retval NRF_ERROR_INTERNAL  Error during PPI channel configuration.
  * @retval NRF_SUCCESS         Buffer set for sending.
  */
 ret_code_t nrf_libuarte_drv_tx(const nrf_libuarte_drv_t * const p_libuarte,
@@ -254,7 +268,6 @@ ret_code_t nrf_libuarte_drv_tx(const nrf_libuarte_drv_t * const p_libuarte,
  * @param p_libuarte      Pointer to libuarte instance.
  * @param clearFlags      Flag to indicate clearing packet-assembly vars (SOH, STUFF, Count)
  *
- * @retval NRF_ERROR_INTERNAL  Error during PPI channel configuration.
  * @retval NRF_SUCCESS         Buffer set for receiving.
  */
 ret_code_t nrf_libuarte_drv_rx_start(const nrf_libuarte_drv_t * const p_libuarte, bool clearFlags);

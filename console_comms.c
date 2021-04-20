@@ -135,7 +135,7 @@ void comms_timer_tick(uint8_t timer_val)
             df_packet_stats_t * ps = get_packet_stats(&intbus);
 
             if (con_comms.comms_state > COMMS_DISCONNECTED)     // there WAS comms
-            {   if ( (last_comms_count > 0) && (last_comms_count == ps->total_chars))   // .. but now no new Comms
+            {   if ( (ps->total_chars == 0) || (last_comms_count == ps->total_chars))   // .. but now no new Comms
                 {   NRF_LOG_INFO("Comms Status: COMMS HAS FROZEN");    
                     nrf_libuarte_drv_rx_start(&intbus, true);                           // restart Comms Rx
                     clear_packet_stats(&intbus);                                        // Clear cumulative packet stats

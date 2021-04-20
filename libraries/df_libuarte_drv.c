@@ -83,8 +83,91 @@ static uint8_t in_char_alt[IN_CHAR_ALT_LEN];
 static void irq_handler(nrfx_uart_event_t const * p_event, void * p_context);
 static void clr_buf_ctl(df_packet_ctl_t * pc);
 
+/** @brief Macro executes given function on every allocated channel in the list between provided
+ * indexes.
+ */
+#define PPI_CHANNEL_FOR_M_N(p_libuarte, m, n, func) \
+        for (int i = m; i < n; i++) \
+        { \
+            if (p_libuarte->ctrl_blk->ppi_channels[i] < PPI_CH_NUM) \
+            { func(&p_libuarte->ctrl_blk->ppi_channels[i]); } \
+        }
+
+/** @brief Macro executes provided function on every allocated PPI channel. */
+#define PPI_CHANNEL_FOR_ALL(p_libuarte, func) \
+        PPI_CHANNEL_FOR_M_N(p_libuarte, 0, NRF_LIBUARTE_DRV_PPI_CH_MAX, func)
+
+/** @brief Disable and free PPI channel. */
+static void ppi_ch_free(nrf_ppi_channel_t * p_ch)
+{
+    nrfx_err_t err;
+    err = nrfx_ppi_channel_disable(*p_ch);
+    ASSERT(err == NRFX_SUCCESS);
+    err = nrfx_ppi_channel_free(*p_ch);
+    ASSERT(err == NRFX_SUCCESS);
+    *p_ch = (nrf_ppi_channel_t)PPI_CH_NUM;
+}
+
+/** @brief Free all channels. */
+static void ppi_free(const nrf_libuarte_drv_t * const p_libuarte)
+{   PPI_CHANNEL_FOR_ALL(p_libuarte, ppi_ch_free);     }
+
+static ret_code_t ppi_channel_configure(nrf_ppi_channel_t * p_ch, uint32_t evt, uint32_t task, uint32_t fork)
+{   nrfx_err_t err;
+
+    err = nrfx_ppi_channel_alloc(p_ch);
+    if (err != NRFX_SUCCESS)
+    {   return NRF_ERROR_NO_MEM;      }
+
+    err = nrfx_ppi_channel_assign(*p_ch, evt, task);
+    if (err != NRFX_SUCCESS)
+    {   return NRF_ERROR_INTERNAL;     }
+
+    if (fork)
+    {   err = nrfx_ppi_channel_fork_assign(*p_ch, fork);
+        if (err != NRFX_SUCCESS)
+        {   return NRF_ERROR_INTERNAL;     }
+    }
+
+    return NRF_SUCCESS;
+}
+
+static ret_code_t ppi_configure(const nrf_libuarte_drv_t * const p_libuarte, nrf_libuarte_drv_config_t * p_config)
+{
+    ret_code_t ret = NRFX_SUCCESS;
+
+    ret = ppi_channel_configure(
+            &p_libuarte->ctrl_blk->ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_ENDRX_STARTRX],
+            nrf_uart_event_address_get(p_libuarte->uart.p_reg, NRF_UART_EVENT_RXDRDY),
+            nrf_uart_task_address_get(p_libuarte->uart.p_reg, NRF_UART_TASK_STARTRX),
+            NULL);
+    if (ret != NRF_SUCCESS)
+    {   goto complete_config;   }
 
 
+    ret = ppi_channel_configure(
+            &p_libuarte->ctrl_blk->ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_RXERR_STARTRX],
+            nrf_uart_event_address_get(p_libuarte->uart.p_reg, NRF_UART_EVENT_ERROR),
+            nrf_uart_task_address_get(p_libuarte->uart.p_reg, NRF_UART_TASK_STARTRX),
+            NULL);
+    if (ret != NRF_SUCCESS)
+    {   goto complete_config;   }
+
+
+     ret = ppi_channel_configure(
+            &p_libuarte->ctrl_blk->ppi_channels[NRF_LIBUARTE_DRV_PPI_CH_RXTO_STARTRX],
+            nrf_uart_event_address_get(p_libuarte->uart.p_reg, NRF_UART_EVENT_RXTO),
+            nrf_uart_task_address_get(p_libuarte->uart.p_reg, NRF_UART_TASK_STARTRX),
+            NULL);
+
+complete_config:
+    if (ret == NRF_SUCCESS)
+    {   return ret;   }
+
+    ppi_free(p_libuarte);
+
+    return ret;
+}
 
 ret_code_t nrf_libuarte_drv_init(const nrf_libuarte_drv_t * const p_libuarte,
                              nrf_libuarte_drv_config_t * p_config,
@@ -118,8 +201,12 @@ ret_code_t nrf_libuarte_drv_init(const nrf_libuarte_drv_t * const p_libuarte,
     uc.p_context = p_libuarte;
     uc.baudrate = p_config->baudrate;
     
-    ret = nrfx_uart_init(&p_libuarte->uarta, &uc, irq_handler);
+    ret = nrfx_uart_init(&p_libuarte->uart, &uc, irq_handler);
     nrf_libuarte_drv_rx_start(p_libuarte, true);
+
+    ret = ppi_configure(p_libuarte, p_config);
+    if (ret != NRF_SUCCESS)
+    {   return NRF_ERROR_INTERNAL;  }
 
     p_libuarte->ctrl_blk->enabled = true;
 
@@ -133,8 +220,10 @@ void nrf_libuarte_drv_uninit(const nrf_libuarte_drv_t * const p_libuarte)
 
     p_libuarte->ctrl_blk->enabled = false;
 
-    nrfx_uart_uninit(&p_libuarte->uarta);
+    nrfx_uart_uninit(&p_libuarte->uart);
  
+    ppi_free(p_libuarte);
+
     p_libuarte->ctrl_blk->tx_out_buf.p_data = NULL;
 
 }
@@ -156,16 +245,16 @@ ret_code_t nrf_libuarte_drv_tx(const nrf_libuarte_drv_t * const p_libuarte,
     {   nrf_gpio_pin_set(p_libuarte->ctrl_blk->txen_pin);    }          // turn on the TxEnable pin
 
     NRF_LOG_DEBUG("Started TX total length:%d", len);
-    ret = nrfx_uart_tx(&p_libuarte->uarta, p_data, len);
+    ret = nrfx_uart_tx(&p_libuarte->uart, p_data, len);
 
     return(ret);
 }
 
 ret_code_t nrf_libuarte_drv_rx_start(const nrf_libuarte_drv_t * const p_libuarte, bool clearFlags)
 {
-    nrfx_uart_rx_enable(&p_libuarte->uarta);
-    nrfx_uart_rx(&p_libuarte->uarta, in_char, IN_CHAR_LEN);
-    nrfx_uart_rx(&p_libuarte->uarta, in_char_alt, IN_CHAR_ALT_LEN);
+    nrfx_uart_rx_enable(&p_libuarte->uart);
+    nrfx_uart_rx(&p_libuarte->uart, in_char, IN_CHAR_LEN);
+    nrfx_uart_rx(&p_libuarte->uart, in_char_alt, IN_CHAR_ALT_LEN);
     
     if (clearFlags)
     {   clr_buf_ctl(&p_libuarte->ctrl_blk->packet_ctl);  }
@@ -176,7 +265,7 @@ ret_code_t nrf_libuarte_drv_rx_start(const nrf_libuarte_drv_t * const p_libuarte
 void nrf_libuarte_drv_rx_stop(const nrf_libuarte_drv_t * const p_libuarte)
 {
     NRF_LOG_DEBUG("Stopping Rx.");
-    nrfx_uart_rx_disable(&p_libuarte->uarta);
+    nrfx_uart_rx_disable(&p_libuarte->uart);
 }
 
 df_packet_stats_t * get_packet_stats(const nrf_libuarte_drv_t * const p_libuarte)

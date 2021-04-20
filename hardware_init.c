@@ -251,7 +251,7 @@ nrfx_timer_t pulse_counter = NRFX_TIMER_INSTANCE(DF_PULSER_TIMER_INST);         
 void df_pulser_timer_event_handler(nrf_timer_event_t event_type, void *p_context)
 //void df_pulser_timer_event_handler(void)
 {
-   NRFX_LOG_INFO("Counter handler. Event"); 
+//   NRFX_LOG_INFO("Pulser Counter event handler"); 
 }
 
 ret_code_t pulser_timer_setup(void)
@@ -282,13 +282,15 @@ TS_x:
 void df_gpiote_event_handler(nrfx_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
 {
 //   nrfx_timer_increment(&pulse_counter);
+//    NRFX_LOG_INFO("Pulser GPIOTE event handler at pin[%d], action[%x]", pin, action); 
 }
 
 ret_code_t pulser_gpiote_setup()                         
 {   ret_code_t ret = NRFX_SUCCESS;
 
     //nrfx_gpiote_in_config_t i_config = NRFX_GPIOTE_CONFIG_IN_SENSE_HITOLO(true);  // config packet for gpiote channel .. sense on falling edge
-    nrfx_gpiote_in_config_t i_config = NRFX_GPIOTE_CONFIG_IN_SENSE_TOGGLE(true);    // config packet for gpiote channel .. sense on both edges
+    //nrfx_gpiote_in_config_t i_config = NRFX_GPIOTE_CONFIG_IN_SENSE_TOGGLE(true);    // config packet for gpiote channel .. sense on both edges
+    nrfx_gpiote_in_config_t i_config = NRFX_GPIOTE_RAW_CONFIG_IN_SENSE_LOTOHI(true);
     i_config.pull = NRF_GPIO_PIN_PULLUP;                                            // gpiote config values .. set pin pullup
 	
     //ret = nrfx_gpiote_in_init(PULSER_PIN, &i_config, (nrfx_gpiote_evt_handler_t)stub);    // configure PULSER_PIN, event handler callback is set to NULL to keep it from triggering unecessary CB calls.
@@ -335,10 +337,10 @@ ret_code_t df_pulser_init(void)
     ret = pulser_gpiote_setup();
     if (ret != NRFX_SUCCESS) goto PI_x;
 
-    ret = pulser_ppi_setup();
+    ret = pulser_timer_setup();
     if (ret != NRFX_SUCCESS) goto PI_x;
 
-    ret = pulser_timer_setup();
+    ret = pulser_ppi_setup();
     if (ret != NRFX_SUCCESS) goto PI_x;
 
 PI_x:
