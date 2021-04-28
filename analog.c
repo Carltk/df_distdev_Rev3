@@ -17,7 +17,7 @@ volatile uint8_t analog_state = 1;
 static const nrfx_timer_t analog_timer = NRFX_TIMER_INSTANCE(DF_ANALOG_TIMER_INST);
 static const nrfx_saadc_config_t saadc_config = NRFX_SAADC_DEFAULT_CONFIG;
 
-static nrf_saadc_value_t     m_buffer_pool[2][SAMPLES_IN_BUFFER];
+static nrf_saadc_value_t     m_buffer_pool[1][SAMPLES_IN_BUFFER];
 static uint32_t              m_adc_evt_counter;
 
 static nrf_ppi_channel_t analog_ppi;
@@ -93,21 +93,21 @@ void saadc_callback(nrfx_saadc_evt_t const * p_event)
 void saadc_init(void)
 {
     ret_code_t err_code;
-    
-    nrf_saadc_channel_config_t channel_config = NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN2);
-    //channel_config.gain = NRF_SAADC_GAIN1;
 
     err_code = nrfx_saadc_init(&saadc_config, saadc_callback);
     APP_ERROR_CHECK(err_code);
+    
+    //nrf_saadc_channel_config_t channel_config = NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN2);
+    nrf_saadc_channel_config_t channel_config = NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_DIFFERENTIAL(hardware.or_senseB[0], hardware.or_senseA[0]);
 
     err_code = nrfx_saadc_channel_init(0, &channel_config);
     APP_ERROR_CHECK(err_code);
-
-    err_code = nrfx_saadc_buffer_convert(m_buffer_pool[0], SAMPLES_IN_BUFFER);
+    
+    err_code = nrfx_saadc_calibrate_offset();
     APP_ERROR_CHECK(err_code);
-
-    err_code = nrfx_saadc_buffer_convert(m_buffer_pool[1], SAMPLES_IN_BUFFER);
-    APP_ERROR_CHECK(err_code);
+    
+//    err_code = nrfx_saadc_buffer_convert(m_buffer_pool[0], SAMPLES_IN_BUFFER);
+//    APP_ERROR_CHECK(err_code);
 
 }
 
@@ -120,6 +120,7 @@ ret_code_t df_or_sense_init(void)
     saadc_init();
     saadc_sampling_event_init();
     saadc_sampling_event_enable();
+    nrfx_saadc_buffer_convert(m_buffer_pool[0], SAMPLES_IN_BUFFER);
     NRF_LOG_INFO("SAADC (analog) process started");
 
     return (ret);

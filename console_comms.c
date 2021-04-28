@@ -134,9 +134,13 @@ void comms_timer_tick(uint8_t timer_val)
             {};                      // work around the "a label can only be part of a statement" compiler error
             df_packet_stats_t * ps = get_packet_stats(&intbus);
 
-            if (con_comms.comms_state > COMMS_DISCONNECTED)     // there WAS comms
+            if ((con_comms.comms_state > COMMS_DISCONNECTED) || (con_comms.comms_state == COMMS_ERROR))     // there WAS comms
             {   if ( (ps->total_chars == 0) || (last_comms_count == ps->total_chars))   // .. but now no new Comms
-                {   NRF_LOG_INFO("Comms Status: COMMS HAS FROZEN");    
+                {   
+                    NRF_LOG_INFO("Comms Status: COMMS Frozen or Error");    
+                    NRF_LOG_INFO("Comms Status: chars[%d], EOF[%d], err[%d], good packets[%d], total packets[%d], tx packets[%d] ",
+                        ps->total_chars, ps->EOF_cnt, ps->err_cnt, ps->good_rx_packets, ps->rx_packets, ps->tx_packets);                    
+                    
                     nrf_libuarte_drv_rx_start(&intbus, true);                           // restart Comms Rx
                     clear_packet_stats(&intbus);                                        // Clear cumulative packet stats
                     con_comms.comms_state = COMMS_DISCONNECTED;
@@ -187,6 +191,9 @@ void comms_evt_handler(void * context, nrf_libuarte_drv_evt_t * p_evt)
     {
         case NRF_LIBUARTE_DRV_EVT_GOT_PACKET:
             // handle reception of a qualified (D1 // D2) packet 
+
+            // if (got_new_console_packet())
+            handle_new_console_packet(); 
 
             break;
         case NRF_LIBUARTE_DRV_EVT_TX_DONE:     ///< Requested TX transfer completed.
@@ -253,7 +260,7 @@ msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
                         if (!rd->discovery_holdoff)                         //   .. if we get to 0
                         {   NRF_LOG_INFO("Got Comms Discovery, addr [%x:%x]. Cmd [%x]", md->msg_addr, ddpc.nv_immediate.dev_address, rd->rx_buf[RXBUF_COMMAND]);                                  
                             md->msg_state = retval = MSG_COMPLETE;          //    -> answer the message
-                            rd->discovery_holdoff = ((ddpc.my_rnd >> 4) + 1);  // update the holdoff in case we have to go around again
+                            rd->discovery_holdoff = ((ddpc.my_rnd >> 5) + 1);  // update the holdoff in case we have to go around again
                             update_rng();                                   // and get a new random holdoff for next time
                         }
                         else
@@ -325,7 +332,7 @@ void interpret_msg(msg_data_t *md)
             break;
         case FD_CMD_STAT: 		// Fetch controller Status
             send_resp = true;
-            buf[char_cnt++] = ((comp_type == 0) ? pump.pump_status : components.comp_status);     // send the correct status for the message devicetype
+            buf[char_cnt++] = ((comp_type == 0) ? pump.pump_flags : components.comp_flags);     // send the correct status for the message devicetype
             buf[char_cnt++] = ((comp_type == 0) ? pump.pump_state : 0);                            // send the correct state for the message devicetype
             
             if (ddpc.nv_immediate.dev_address & 0xFF00)                                         // If it's a temporary address .. set to "FOSTERED"
@@ -362,21 +369,20 @@ void interpret_msg(msg_data_t *md)
             NRF_LOG_INFO("Unknown Command Rx [%x]", md->msg_buf[MSGBUF_COMMAND]);
             break;
         case FD_CMD_DISCOVER:
-            con_comms.discovery_temp_addr = buf2int(&md->msg_buf[MSGBUF_PAYLOAD]);    // Message contains the temporary address 0xFF<TempIndex> in payload (also capture the temporary address)
-            ddpc.nv_immediate.dev_address = buf2int(&md->msg_buf[MSGBUF_PAYLOAD]);  // Message contains the temporary address 0xFF<TempIndex> in payload (also capture the temporary address)
-            
-// TODO - allow saving of the new address            flash_control.do_immediate_save = true;
+            con_comms.discovery_temp_addr = buf2int(&md->msg_buf[MSGBUF_PAYLOAD]);      // Message contains the temporary address 0xFF<TempIndex> in payload (also capture the temporary address)
+            ddpc.nv_immediate.dev_address = buf2int(&md->msg_buf[MSGBUF_PAYLOAD]);      // Message contains the temporary address 0xFF<TempIndex> in payload (also capture the temporary address)
+            flash_control.do_immediate_save = true;
 
-            int2buf(&buf[MSGBUF_ADDR], con_comms.discovery_temp_addr);                // we will respond FROM that message .. swap address payload into output address field
+            int2buf(&buf[MSGBUF_ADDR], con_comms.discovery_temp_addr);                  // we will respond FROM that message .. swap address payload into output address field
             
             NRF_LOG_INFO("DDPC Addr changed to [%x]", ddpc.nv_immediate.dev_address);
             
-            if ((buf[MSGBUF_TYPE] & 0xFE) == 0xFE)                  // If the message was TO Discovery or AllCall type
-            {   buf[MSGBUF_TYPE] = ddpc.dev_type[0];                   // replace type with my primary type for the response message
+            if ((buf[MSGBUF_TYPE] & 0xFE) == 0xFE)                                      // If the message was TO Discovery or AllCall type
+            {   buf[MSGBUF_TYPE] = ddpc.dev_type[0];                                    // replace type with my primary type for the response message
                 NRF_LOG_INFO("DDPC Type requested [%x]", buf[MSGBUF_TYPE]);
             }
 
-            buf[char_cnt++] = ddpc.my_rnd;                          // add the system random number to the msg (makes collision-detection more obvious)
+            buf[char_cnt++] = ddpc.my_rnd;                                              // add the system random number to the msg (makes collision-detection more obvious)
             send_resp = true;
             break;
         case FD_CMD_IDENT:
@@ -442,7 +448,7 @@ uint8_t handle_action_cmd(msg_data_t *md, char *buf)
             buf[0] = cmd;            
             buf[1] = pump.pump_state;           // Write the status into the buffer
             long2buf(&buf[2], pump.transaction_count);
-            pump.pump_status &= ~PUMP_STATUS_PULSES;    // Clear the "new pulses" flag when count is read
+            pump.pump_flags &= ~PUMP_FLAG_PULSES;    // Clear the "new pulses" flag when count is read
             retval = 6;
             break;
         case PUMP_CMD_DATA_MSG:                 // Sending Data to the device 
@@ -479,8 +485,8 @@ uint8_t send_attr_bytes(msg_data_t *md, char *buf, char bytes_reqd)
         case DDPC_ATTRIB_RND:
             buf[0] = ddpc.my_rnd;
             break;
-        case DDPC_ATTRIB_PUMPSTAT:
-            buf[0] = pump.pump_status;
+        case DDPC_ATTRIB_PUMP_FLAGS:
+            buf[0] = pump.pump_flags;
             break;
         case DDPC_ATTRIB_NOZZLE:
             buf[0] = pump.nozzle;
@@ -490,7 +496,7 @@ uint8_t send_attr_bytes(msg_data_t *md, char *buf, char bytes_reqd)
             break;
         case DDPC_ATTRIB_PULSES:
             long2buf(buf, pump.transaction_count);
-            pump.pump_status &= ~PUMP_STATUS_PULSES;        // Clear the pulses flag when count is read
+            pump.pump_flags &= ~PUMP_FLAG_PULSES;        // Clear the pulses flag when count is read
             break;
         case DDPC_ATTRIB_PUMP_STATE:
             buf[0] = pump.pump_state;

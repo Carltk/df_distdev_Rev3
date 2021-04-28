@@ -56,8 +56,8 @@ ret_code_t df_hardware_init(void)
     APP_ERROR_CHECK(df_pulser_init());              // Initialise the Pulser Counter
     NRFX_LOG_INFO("Pulser Handler - Initialised");     
 
-    //APP_ERROR_CHECK(df_or_sense_init());              // Initialise the Pulser Counter
-    //NRFX_LOG_INFO("Override Sense Handler - Initialised");     
+    APP_ERROR_CHECK(df_or_sense_init());              // Initialise the Pulser Counter
+    NRFX_LOG_INFO("Override Sense Handler - Initialised");     
 
 
     return ret;
@@ -94,6 +94,9 @@ ret_code_t df_inputs_init(void)
     hardware.gpin_inverted[0] = true;
     hardware.psense_pin[0] = PSENSE_PIN; 
     hardware.psense_inverted[0] = false;
+
+    hardware.or_senseA[0] = OR_SENSE_1;
+    hardware.or_senseB[0] = OR_SENSE_2;
     //hardware.nozzle_pin[1] = NOZZLE_2_PIN;        // Add more like this
 
     ret = app_button_init(p_button, sizeof(p_button) / sizeof(p_button[digi_in_nozzle]), BUTTON_DEBOUNCE_MS);
@@ -129,12 +132,12 @@ void df_nozzle_handler(uint8_t pin_no, uint8_t button_action)
             components.nozzle = pinval;              // and the component view
 
             if (pinval)  
-            {   pump.pump_status |= PUMP_STATUS_NOZZLE;                 // set the pump status bit
-                components.comp_status |= CONTROLLER_STATUS_NOZZLE;     // and component status bit
+            {   pump.pump_flags |= PUMP_FLAG_NOZZLE;                 // set the pump status bit
+                components.comp_flags |= CONTROLLER_FLAG_NOZZLE;     // and component status bit
             }
             else 
-            {   pump.pump_status &= ~PUMP_STATUS_NOZZLE;    
-                components.comp_status &= ~CONTROLLER_STATUS_NOZZLE;
+            {   pump.pump_flags &= ~PUMP_FLAG_NOZZLE;    
+                components.comp_flags &= ~CONTROLLER_FLAG_NOZZLE;
             }
 
             NRFX_LOG_INFO("Nozzle [%d] State [%x]", i, pinval); 
@@ -387,7 +390,7 @@ void rng_handler(uint8_t rng_data)
     ddpc.my_rnd = rng_data;
 
     if (ddpc.nv_immediate.dev_address == DISCOVERY_DFLT_ADDR)
-    {  con_comms.discovery_holdoff = ((ddpc.my_rnd >> 4) + 1);        }
+    {  con_comms.discovery_holdoff = ((ddpc.my_rnd >> 5) + 1);        }
 
 NRF_LOG_INFO("Address Discovery holdoff changed to [%d]", con_comms.discovery_holdoff);
 

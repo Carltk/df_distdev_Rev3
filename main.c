@@ -1,4 +1,4 @@
-/**
+ /**
  * Copyright (c) 2016 - 2019, Nordic Semiconductor ASA
  *
  * All rights reserved.
@@ -53,6 +53,8 @@
 
 #include "nrfx_clock.h"
 #include "nrfx_power.h"
+
+#include "nrf_ficr.h"
 
 #include "nrfx_log.h"
 #include "nrf_log_ctrl.h"
@@ -118,7 +120,7 @@ int main(void)
     ddpc.nv_panic.boot_count += 1;                      // inc the boot count
     flash_control.need_panic_save = true;
 
-    NRF_LOG_INFO("DF_DistDev - Main Loop Starting");
+    NRF_LOG_INFO("DF_DistDev - Started at Address [%x] with DeviceID [%ld]", ddpc.nv_immediate.dev_address, NRF_FICR->DEVICEID[0]);
 
     ConsoleWrite(HelloDDPC, HelloLen);
 
@@ -126,9 +128,6 @@ int main(void)
     {
         if (!NRF_LOG_PROCESS())
         {   __WFE();    }
-        
-        if (got_new_console_packet())
-        {    handle_new_console_packet();   }
         
       //nrf_delay_ms(2000);
       //update_rng();

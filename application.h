@@ -26,7 +26,7 @@ typedef enum {
 #define DDPC_ATTRIB_FLASH_WR    3
 #define DDPC_ATTRIB_TEMP        4
 #define DDPC_ATTRIB_RND         5
-#define DDPC_ATTRIB_PUMPSTAT    6
+#define DDPC_ATTRIB_PUMP_FLAGS  6
 #define DDPC_ATTRIB_NOZZLE      7
 #define DDPC_ATTRIB_RELAY       8
 #define DDPC_ATTRIB_PULSES      9
@@ -139,11 +139,11 @@ extern ddpc_t ddpc;
 // ddpc = DF_DDPC_DFLT;
 
 // pump status flags
-#define PUMP_STATUS_AVAILABLE   0x01
+#define PUMP_FLAG_AVAILABLE   0x01
 
-#define PUMP_STATUS_NOZZLE      0x10    // State of the nozzle
-#define PUMP_STATUS_PULSES      0x20    // New Pulses available (clear on read pulses attribute byte)
-#define PUMP_STATUS_RELAY       0x40    // State of the output relay
+#define PUMP_FLAG_NOZZLE      0x10    // State of the nozzle
+#define PUMP_FLAG_PULSES      0x20    // New Pulses available (clear on read pulses attribute byte)
+#define PUMP_FLAG_RELAY       0x40    // State of the output relay
 
 
 /**
@@ -151,15 +151,15 @@ extern ddpc_t ddpc;
  */
 typedef struct
 {
-    uint8_t pump_status;        // status byte as reported to the Rabbit Controller
+    uint8_t pump_flags;                 // flag byte as reported to the Rabbit Controller
 
     // individual control components
     uint8_t nozzle;
     uint8_t relay;
-    uint32_t curr_pulses;           // Pulse count shadow of the Timer/Counter
+    uint32_t curr_pulses;               // Pulse count shadow of the Timer/Counter
 
     // the pump logical device
-    pump_state_t pump_state;             // internal state of the pump (drives the state machine)
+    pump_state_t pump_state;            // internal state of the pump (drives the state machine)
     uint32_t transaction_count;     
 
     uint32_t timer;
@@ -169,24 +169,24 @@ extern pump_controller_t pump;
 
 #define DF_PUMP_DFLT        \
 {                           \
-    .pump_status = 0,       \
+    .pump_flags = 0,       \
     .pump_state = 0,        \
     .curr_pulses = 0,       \
     .transaction_count = 0  \
 }
 // pump = DF_PUMP_DFLT;
 
-#define CONTROLLER_STATUS_ALIVE   0x01
+#define CONTROLLER_FLAG_ALIVE   0x01
 
-#define CONTROLLER_STATUS_NOZZLE  0x10    // State of the nozzle
-#define CONTROLLER_STATUS_PULSES  0x20    // New Pulses available (clear on read pulses attribute byte)
-#define CONTROLLER_STATUS_RELAY   0x40    // State of the output relay
+#define CONTROLLER_FLAG_NOZZLE  0x10    // State of the nozzle
+#define CONTROLLER_FLAG_PULSES  0x20    // New Pulses available (clear on read pulses attribute byte)
+#define CONTROLLER_FLAG_RELAY   0x40    // State of the output relay
 
 /**
  * @brief component structure -> parameters describing the logical conponents in the device
  */
 typedef struct
-{   uint8_t comp_status;
+{   uint8_t comp_flags;
 
     // the components
     uint8_t nozzle;
@@ -199,7 +199,7 @@ extern comp_controller_t components;
 
 #define DF_COMP_DFLT        \
 {                           \
-    .comp_status = 0,       \
+    .comp_flags = 0,       \
 }
 // components = DF_COMP_DFLT;
 

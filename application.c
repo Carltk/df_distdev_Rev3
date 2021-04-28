@@ -84,7 +84,7 @@ void app_timer_handle(void * p_context)
                         pump.transaction_count = pump.transaction_count + (l - pump.curr_pulses);
                         pump.curr_pulses = l;                       // Update the pulse counts
                         
-                        pump.pump_status |= PUMP_STATUS_PULSES;     // Flag more pulses
+                        pump.pump_flags |= PUMP_FLAG_PULSES;     // Flag more pulses
                         //NRFX_LOG_INFO("Counter is now [%ld]", l); 
                     }
                         

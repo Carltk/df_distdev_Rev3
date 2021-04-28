@@ -117,7 +117,8 @@ typedef struct
     uint8_t pushbutton_pin[NUM_PBS];
     uint8_t pushbutton_time[NUM_PBS];
 
-    uint8_t or_sense[NUM_RELAYS];
+    uint8_t or_senseA[NUM_RELAYS];
+    uint8_t or_senseB[NUM_RELAYS];
     uint32_t or_sense_val[NUM_RELAYS];  
 
     uint32_t pulses[NUM_PULSES];

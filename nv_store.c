@@ -256,6 +256,8 @@ ret_code_t Flash2Shadow()
     ret = panic_to_shadow();
     APP_ERROR_CHECK(ret);
 
+    NRF_LOG_INFO("Immediate and Panic Flash read into RAM shadow");  
+
     return(ret);
 }
 
