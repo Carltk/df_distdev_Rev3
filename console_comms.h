@@ -61,6 +61,10 @@
     #define PUMP_CMD_ALL_LIGHTS_ON 0xFD	 // NoResp (32)
     #define PUMP_CMD_ALL_LIGHTS_OFF 0xFB // NoResp (32)
 
+#define FD_CMD_DEVICE_ID         0x43    // DeviceID Command - Device will respond to an all-call (0xFFFF Addr) with the correct DeviceID in the payload
+                                            // 
+
+
 typedef enum {
     COMMS_INIT = 0,                     // Comms starting
     COMMS_ERROR,                        // Comms errors

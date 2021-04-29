@@ -114,9 +114,10 @@ typedef struct
 
     // non-permanent device storage
     uint32_t curr_temp;                 
-    uint8_t dev_type[NUM_DEV_TYPES];    // Device type(s)
+    uint8_t dev_types[NUM_DEV_TYPES];    // Device type(s)
     
     uint8_t my_rnd;
+    uint32_t my_id;
 } ddpc_t;
 extern ddpc_t ddpc;
 
@@ -125,16 +126,17 @@ extern ddpc_t ddpc;
 #define DF_DDPC_DFLT    \
 {   .nv_immediate.initialised = DDPC_INIT_MAGIC_NUM,    \
     .nv_immediate.dev_address = THIS_ADDRESS,           \
-    .nv_panic.uptime_mins = 0,      \
-    .nv_panic.boot_count = 1,       \
-    .nv_panic.flash_writes = 0,     \
-    .nv_panic.flash_erase = 0,      \
-    .curr_temp = 0,                 \
-    .dev_type[0] = DEV_TYPE_PUMP,   \
-    .dev_type[1] = DEV_TYPE_COMP,   \
-    .dev_type[2] = DISCOVERY_TYPE,  \
-    .dev_type[3] = ALL_CALL_TYPE,   \
-    .my_rnd = 0,                    \
+    .nv_panic.uptime_mins = 0,       \
+    .nv_panic.boot_count = 1,        \
+    .nv_panic.flash_writes = 0,      \
+    .nv_panic.flash_erase = 0,       \
+    .curr_temp = 0,                  \
+    .dev_types[0] = DEV_TYPE_PUMP,   \
+    .dev_types[1] = DEV_TYPE_COMP,   \
+    .dev_types[2] = DISCOVERY_TYPE,  \
+    .dev_types[3] = ALL_CALL_TYPE,   \
+    .my_rnd = 0,                     \
+    .my_id = 0                      \
 }
 // ddpc = DF_DDPC_DFLT;
 

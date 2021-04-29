@@ -54,7 +54,7 @@
 #include "nrfx_clock.h"
 #include "nrfx_power.h"
 
-#include "nrf_ficr.h"
+#include "nrf_ficr.h"            
 
 #include "nrfx_log.h"
 #include "nrf_log_ctrl.h"
@@ -120,7 +120,9 @@ int main(void)
     ddpc.nv_panic.boot_count += 1;                      // inc the boot count
     flash_control.need_panic_save = true;
 
-    NRF_LOG_INFO("DF_DistDev - Started at Address [%x] with DeviceID [%ld]", ddpc.nv_immediate.dev_address, NRF_FICR->DEVICEID[0]);
+    ddpc.my_id = NRF_FICR->DEVICEID[0];
+
+    NRF_LOG_INFO("DF_DistDev - Started at Address [%x] with DeviceID [%ld]", ddpc.nv_immediate.dev_address, ddpc.my_id);
 
     ConsoleWrite(HelloDDPC, HelloLen);
 

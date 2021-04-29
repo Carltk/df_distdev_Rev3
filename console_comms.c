@@ -244,8 +244,8 @@ msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
         
         md->msg_type = rd->rx_buf[RXBUF_TYPE];
 
-        if (isInCharArray(md->msg_type, ddpc.dev_type, NUM_DEV_TYPES))              // See if the message type matches one in my array of acceptable types
-        {   md->msg_addr = buf2int(&rd->rx_buf[RXBUF_ADDR]);              // grab the address from the message
+        if (isInCharArray(md->msg_type, ddpc.dev_types, NUM_DEV_TYPES))     // See if the message type matches one in my array of acceptable types
+        {   md->msg_addr = buf2int(&rd->rx_buf[RXBUF_ADDR]);                // grab the address from the message
 
             if (md->msg_addr == DISCOVERY_DFLT_ADDR)                        // If it's the Adoption address
             {   
@@ -270,15 +270,15 @@ msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
                     {   md->msg_state = retval = MSG_DROPPED;   }           // In discovery & not a discovery command .. drop the message
                 }
             }
-            else if (md->msg_addr == ddpc.nv_immediate.dev_address)                      // See if it is my real address. This needs to be after Discovery to stop answering Polls in Discovery mode.
-            {   md->msg_state = retval = MSG_COMPLETE;  }               // -> continue to processing of the message
+            else if (md->msg_addr == ddpc.nv_immediate.dev_address)         // See if it is my real address. This needs to be after Discovery to stop answering Polls in Discovery mode.
+            {   md->msg_state = retval = MSG_COMPLETE;  }                   // -> continue to processing of the message
             else if (md->msg_addr == ALL_CALL_ADDR)
-            {   md->msg_state = retval = MSG_COMPLETE;  }       // -> good Type & Address
+            {   md->msg_state = retval = MSG_COMPLETE;  }                   // -> good Type & Address
             else
-            {   md->msg_state = retval = MSG_BAD_ADDR;  }       // message for another device, output error message
+            {   md->msg_state = retval = MSG_BAD_ADDR;  }                   // message for another device, output error message
         }
         else            // Bad Type
-        {   md->msg_state = retval = MSG_BAD_TYPE;  }           // message for another device, output error message
+        {   md->msg_state = retval = MSG_BAD_TYPE;  }                       // message for another device, output error message
     }
 
     
@@ -378,11 +378,13 @@ void interpret_msg(msg_data_t *md)
             NRF_LOG_INFO("DDPC Addr changed to [%x]", ddpc.nv_immediate.dev_address);
             
             if ((buf[MSGBUF_TYPE] & 0xFE) == 0xFE)                                      // If the message was TO Discovery or AllCall type
-            {   buf[MSGBUF_TYPE] = ddpc.dev_type[0];                                    // replace type with my primary type for the response message
+            {   buf[MSGBUF_TYPE] = ddpc.dev_types[0];                                   // replace type with my primary type for the response message
                 NRF_LOG_INFO("DDPC Type requested [%x]", buf[MSGBUF_TYPE]);
             }
 
-            buf[char_cnt++] = ddpc.my_rnd;                                              // add the system random number to the msg (makes collision-detection more obvious)
+            memcpy(&buf[char_cnt], &ddpc.my_id, sizeof(ddpc.my_id));                    // send the DeviceID as payload of the Discovery packet .. move data across
+            char_cnt += sizeof(ddpc.my_id);                                             // Advance the buffer count 
+            
             send_resp = true;
             break;
         case FD_CMD_IDENT:
@@ -406,6 +408,14 @@ void interpret_msg(msg_data_t *md)
             if (c)
             {   send_resp = true;
                 char_cnt += c;
+            }
+            break;
+        case FD_CMD_DEVICE_ID:
+            if (buf2long(&md->msg_buf[MSGBUF_PAYLOAD]) == ddpc.my_id)                       // Check that the payload of the Msg contains my DeviceID
+            {   int2buf(&buf[MSGBUF_ADDR], ddpc.nv_immediate.dev_address);                  // Modify the reply address to mine (it may have been an all-call)
+                memcpy(&buf[MSGBUF_PAYLOAD], &ddpc.my_id, sizeof(ddpc.my_id));              // send the DeviceID as payload of the Discovery packet .. move data across
+                char_cnt += sizeof(ddpc.my_id);                                             // Advance the buffer count 
+                send_resp = true;
             }
             break;
         default:

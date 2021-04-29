@@ -56,8 +56,8 @@ ret_code_t df_hardware_init(void)
     APP_ERROR_CHECK(df_pulser_init());              // Initialise the Pulser Counter
     NRFX_LOG_INFO("Pulser Handler - Initialised");     
 
-    APP_ERROR_CHECK(df_or_sense_init());              // Initialise the Pulser Counter
-    NRFX_LOG_INFO("Override Sense Handler - Initialised");     
+    //APP_ERROR_CHECK(df_or_sense_init());              // Initialise the Pulser Counter
+    //NRFX_LOG_INFO("Override Sense Handler - Initialised");     
 
 
     return ret;

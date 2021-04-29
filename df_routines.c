@@ -36,6 +36,9 @@ void int2buf(char *buf, uint16_t val)
     *(buf + 1) = val & 0xFF;
 }
 
+uint32_t buf2long(char *buf)
+{   return((buf[0] << 24) + (buf[1] << 16) + (buf[2] << 8) + buf[3]); }
+
 void long2buf(char *buf, uint32_t val)
 {   *buf = (val >> 24) & 0xFF;
     *(buf + 1) = (val >> 16) & 0xFF;
