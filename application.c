@@ -214,7 +214,13 @@ void update_temp(void)
 * @brief Function for clearing Device memory back to Factory default settings
 */
 void do_factory_default(bool SuperDflt)
-{   ddpc.nv_immediate.dev_address = DISCOVERY_DFLT_ADDR;
+{   auto int a;
+    
+    wipeAllLEDSlots();
+    a = addLEDPattern(PROC_LED_VIOLET, LED_FLASH_FAST, 40, 40, NULL, 0xFF);     // Start a fast flash in violet
+    loopLEDPattern(a, a);                                                       // change the linkNext pointer to itself    
+
+    ddpc.nv_immediate.dev_address = DISCOVERY_DFLT_ADDR;
     flash_control.do_immediate_save = true;
 
     con_comms.discovery_temp_addr = DISCOVERY_DFLT_ADDR;

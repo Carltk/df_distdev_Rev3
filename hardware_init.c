@@ -152,15 +152,16 @@ void df_mode_handler(uint8_t pin_no, uint8_t button_action)
 {   uint8_t a;
     NRFX_LOG_INFO("Mode pin_no [%d] State [%x]", pin_no, button_action);                     
     
-    if (button_action)
-    {   wipeAllLEDSlots();
-        a = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_MED, 120, 120, NULL, 0xFF);     // Start a 1sec flash in yellow
-        loopLEDPattern(a, a);                                                       // change the linkNext pointer to itself
-    }
-    
     for (uint8_t i=0;i<NUM_PBS;i++)                                                 // The mode button handler is in the application timer handler so that different hold-times can be determined
     {   if (hardware.pushbutton_pin[i] = pin_no) 
         {   hardware.pushbutton[i] = button_action; 
+
+            if ((button_action) && (hardware.pushbutton_time[i] == 0))
+            {   wipeAllLEDSlots();
+                a = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_MED, 120, 120, NULL, 0xFF);     // Start a 1sec flash in yellow
+                loopLEDPattern(a, a);                                                       // change the linkNext pointer to itself
+            }
+
             NRFX_LOG_INFO("Mode Button [%d] State [%x]", i, button_action);             
             break;
         }

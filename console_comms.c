@@ -139,7 +139,7 @@ void comms_timer_tick(uint8_t timer_val)
                 {   
                     NRF_LOG_INFO("Comms Status: COMMS Frozen or Error");    
                     NRF_LOG_INFO("Comms Status: chars[%d], EOF[%d], err[%d], good packets[%d], total packets[%d], tx packets[%d] ",
-                        ps->total_chars, ps->EOF_cnt, ps->err_cnt, ps->good_rx_packets, ps->rx_packets, ps->tx_packets);                    
+                                  ps->total_chars, ps->EOF_cnt, ps->err_cnt, ps->good_rx_packets, ps->rx_packets, ps->tx_packets);                    
                     
                     nrf_libuarte_drv_rx_start(&intbus, true);                           // restart Comms Rx
                     clear_packet_stats(&intbus);                                        // Clear cumulative packet stats

@@ -144,3 +144,21 @@ DDPC_Rev2 Board Notes
       - Perhaps a short from Pin42 (P0.19) to the via off Pin40 (RESET)
       - Alternatively, the MagSense Output could be doubled onto Mode(PB) and Pin46(P0.22) coupled to RESET.
 
+
+
+DDPC Adoption Scenarios
+    1. No Devices in ConDevs, new Device attached and manually adopted via tech menu
+    2. Device added in ConDevs without DeviceID, new device attached and manually adopted via tech menu
+    3. Device added in ConDevs with DeviceID, new device attached and automatically adopted
+    4. Device failure - new Device adopted via tech menu and replaced into existing ConDevs element
+    5. Device failure - new Device added and automatically adopted due to ConDevs editing of DeviceID
+    6. Device to be moved from one ConDev to another
+
+
+
+
+DDPC Adoption Error States
+    1. ConDevs gets 2 elements with the same DeviceID
+    2. Multiple Devices attached with the same address
+    x. Device added with known (to ConDevs) DeviceID but different Address
+    y. Device added with known Address but different DeviceID
