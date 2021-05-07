@@ -119,6 +119,7 @@
 #define APP_VERSION_METADATA "+" __DATE__ " " __TIME__
 #endif
 
+#define OVER_TEMP_THRESHOLD 7000
 
 // </h> 
 //==========================================================

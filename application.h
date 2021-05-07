@@ -241,6 +241,7 @@ extern app_state_t app_state;
 ret_code_t application_init(void);
 void update_temp(void);
 
+void set_address_default(void);
 void do_factory_default(bool SuperDflt);
 void pump_action_cmd(pump_controller_t *this_pump, uint8_t cmd);
 void pump_change_state(pump_controller_t *this_pump, uint8_t new_state, uint32_t timeout);

@@ -148,6 +148,7 @@ DDPC_Rev2 Board Notes
 
 DDPC Adoption Scenarios
     1. No Devices in ConDevs, new Device attached and manually adopted via tech menu
+        - OK
     2. Device added in ConDevs without DeviceID, new device attached and manually adopted via tech menu
     3. Device added in ConDevs with DeviceID, new device attached and automatically adopted
     4. Device failure - new Device adopted via tech menu and replaced into existing ConDevs element
@@ -157,8 +158,41 @@ DDPC Adoption Scenarios
 
 
 
+
 DDPC Adoption Error States
     1. ConDevs gets 2 elements with the same DeviceID
     2. Multiple Devices attached with the same address
     x. Device added with known (to ConDevs) DeviceID but different Address
     y. Device added with known Address but different DeviceID
+
+
+
+*** LED Flash Patterns ***
+Normal Display Flash pattern has 3 blinks: System, Comms, Pump
+
+System:
+    > 10000 Flash Erase operations      RED
+    Over 70 degrees                     MAGENTA
+    Factory Default Address             ORANGE
+    Temporary Address                   YELLOW
+    Other (Good)                        GREEN 
+
+Comms:
+    COMMS_INIT, COMMS_DISCONNECTED      WHITE           
+    COMMS_AUTOBAUD                      MAGENTA
+    COMMS_VISIBLE                       YELLOW
+    COMMS_ADOPTING                      ORANGE
+    COMMS_FOSTERED                      YELLOW_GREEN
+    COMMS_ONLINE                        GREEN
+    COMMS_ERROR                         RED
+
+Pump:
+    PUMP_STATE_IDLE                     GREEN
+    PUMP_STATE_CALL                     ORANGE
+    PUMP_STATE_AUTH                     CYAN
+    PUMP_STATE_BUSY                     BLUE
+    PUMP_STATE_OR_LEAK                  VIOLET
+    PUMP_STATE_OR_TRANS                 MAGENTA
+    PUMP_STATE_PAY                      YELLOW
+    PUMP_STATE_STOP                     ORANGE
+    PUMP_STATE_ERROR                    RED

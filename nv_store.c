@@ -7,8 +7,15 @@
 #include "fds.h"
 #include "app_timer.h"
 
-#include "nrfx_log.h"
 #include "nrf_log_ctrl.h"
+
+#define NRF_LOG_MODULE_NAME nv_store
+// <0=> Off, <1=> Error, <2=> Warning, <3=> Info, <4=> Debug 
+#define NRF_LOG_LEVEL       3
+#define NRF_LOG_INFO_COLOR  0
+#define NRF_LOG_DEBUG_COLOR 0
+#include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
 
 
 /* Array to map FDS events to strings. */
@@ -59,7 +66,7 @@ void TestTimer(bool start)
     {   tt_start = app_timer_cnt_get();     }
     else
     {   uint32_t tt_stop = app_timer_cnt_get();
-        NRFX_LOG_INFO("*** Event Timer: [%ld] ticks (%d ticks per mS) ***", app_timer_cnt_diff_compute(tt_stop, tt_start), ticks_per_ms);
+        NRF_LOG_DEBUG("*** Event Timer: [%ld] ticks (%d ticks per mS) ***", app_timer_cnt_diff_compute(tt_stop, tt_start), ticks_per_ms);
     }
 }
 
@@ -74,24 +81,24 @@ void fds_evt_handler(fds_evt_t const * p_evt)
         case FDS_EVT_WRITE:
             TestTimer(false);                                // !!!CK Here - testing
             if (p_evt->result == NRF_SUCCESS)
-            {   NRFX_LOG_INFO("Record ID:\t0x%04x",  p_evt->write.record_id);
-                NRFX_LOG_INFO("File ID:\t0x%04x",    p_evt->write.file_id);
-                NRFX_LOG_INFO("Record key:\t0x%04x", p_evt->write.record_key);
+            {   NRF_LOG_DEBUG("Record ID:\t0x%04x",  p_evt->write.record_id);
+                NRF_LOG_DEBUG("File ID:\t0x%04x",    p_evt->write.file_id);
+                NRF_LOG_DEBUG("Record key:\t0x%04x", p_evt->write.record_key);
             }
             break;
         case FDS_EVT_UPDATE:
             TestTimer(false);                                // !!!CK Here - testing
             if (p_evt->result == NRF_SUCCESS)
-            {   NRFX_LOG_INFO("Record ID:\t0x%04x",  p_evt->write.record_id);
-                NRFX_LOG_INFO("File ID:\t0x%04x",    p_evt->write.file_id);
+            {   NRF_LOG_DEBUG("Record ID:\t0x%04x",  p_evt->write.record_id);
+                NRF_LOG_DEBUG("File ID:\t0x%04x",    p_evt->write.file_id);
             }
             break;
         case FDS_EVT_DEL_RECORD:
             TestTimer(false);                                // !!!CK Here - testing
             if (p_evt->result == NRF_SUCCESS)
-            {   NRFX_LOG_INFO("Record ID:\t0x%04x",  p_evt->del.record_id);
-                NRFX_LOG_INFO("File ID:\t0x%04x",    p_evt->del.file_id);
-                NRFX_LOG_INFO("Record key:\t0x%04x", p_evt->del.record_key);
+            {   NRF_LOG_DEBUG("Record ID:\t0x%04x",  p_evt->del.record_id);
+                NRF_LOG_DEBUG("File ID:\t0x%04x",    p_evt->del.file_id);
+                NRF_LOG_DEBUG("Record key:\t0x%04x", p_evt->del.record_key);
             }
             flash_control.delete_pending = false;
             break;
@@ -101,16 +108,16 @@ void fds_evt_handler(fds_evt_t const * p_evt)
             if (p_evt->result == NRF_SUCCESS)
             {   ddpc.nv_panic.flash_erase += 1;
                 flash_control.need_panic_save = true;
-                NRFX_LOG_INFO("Garbage Collection Successful");  }
+                NRF_LOG_INFO("Garbage Collection Successful");  }
             break;
         default:
             break;
     }
 
     if (p_evt->result == NRF_SUCCESS)
-    {   NRFX_LOG_INFO("Event: %s received (NRF_SUCCESS)", fds_evt_str[p_evt->id]);   }
+    {   NRF_LOG_INFO("Event: %s received (NRF_SUCCESS)", fds_evt_str[p_evt->id]);   }
     else
-    {   NRFX_LOG_INFO("Event: %s received (%s)", fds_evt_str[p_evt->id], fds_err_str(p_evt->result));   }
+    {   NRF_LOG_INFO("Event: %s received (%s)", fds_evt_str[p_evt->id], fds_err_str(p_evt->result));   }
 }
 
 /**@brief   Sleep until an event is received. */
@@ -158,7 +165,7 @@ ret_code_t nv_store_check_init()
 
     ret = fds_record_find(IMMEDIATE_FILE, IMMEDIATE_REC_KEY, &desc, &tok);
     if (ret == NRFX_SUCCESS)
-    {   NRF_LOG_INFO("FDS Immediate space exists.");   }
+    {   NRF_LOG_DEBUG("FDS Immediate space exists.");   }
     else
     {   fds_record_t fds_immediate = FDS_IMMEDIATE_REC;
         
@@ -178,7 +185,7 @@ ret_code_t nv_store_check_init()
 
     ret = fds_record_find(PANIC_FILE, PANIC_REC_KEY, &desc, &tok);
     if (ret == NRFX_SUCCESS)
-    {   NRF_LOG_INFO("FDS Panic space exists.");   }
+    {   NRF_LOG_DEBUG("FDS Panic space exists.");   }
     else
     {   fds_record_t fds_panic = FDS_PANIC_REC;
         
@@ -336,16 +343,16 @@ ret_code_t get_nv_stat()
     ret = fds_stat(&stat);
     APP_ERROR_CHECK(ret);
 
-    NRF_LOG_INFO("NV Status");
-    NRF_LOG_INFO(" - %d valid recs.", stat.valid_records);
-    NRF_LOG_INFO(" - %d dirty recs (GC-ready).", stat.dirty_records);
-    NRF_LOG_INFO(" - %d corruption.", stat.corruption);
-    NRF_LOG_INFO(" - %d freeable recs", stat.freeable_words);
-    NRF_LOG_INFO(" - %d largest contig", stat.largest_contig);
-    NRF_LOG_INFO(" - %d open recs", stat.open_records);
-    NRF_LOG_INFO(" - %d pages avail", stat.pages_available);
-    NRF_LOG_INFO(" - %d reserved words", stat.words_reserved);
-    NRF_LOG_INFO(" - %d words used", stat.words_used);
+    NRF_LOG_DEBUG("NV Status");
+    NRF_LOG_DEBUG(" - %d valid recs.", stat.valid_records);
+    NRF_LOG_DEBUG(" - %d dirty recs (GC-ready).", stat.dirty_records);
+    NRF_LOG_DEBUG(" - %d corruption.", stat.corruption);
+    NRF_LOG_DEBUG(" - %d freeable recs", stat.freeable_words);
+    NRF_LOG_DEBUG(" - %d largest contig", stat.largest_contig);
+    NRF_LOG_DEBUG(" - %d open recs", stat.open_records);
+    NRF_LOG_DEBUG(" - %d pages avail", stat.pages_available);
+    NRF_LOG_DEBUG(" - %d reserved words", stat.words_reserved);
+    NRF_LOG_DEBUG(" - %d words used", stat.words_used);
     NRF_LOG_FLUSH();
 }
 
@@ -399,12 +406,12 @@ void fds_rec_delete(uint32_t file, uint32_t key)
         TestTimer(true);                                // !!!CK Here - testing
         ret_code_t rc = fds_record_delete(&desc);
         if (rc == NRF_SUCCESS)
-        {   NRFX_LOG_INFO("Record deletion error: %s", fds_err_str(rc));    }
+        {   NRF_LOG_INFO("Record deletion error: %s", fds_err_str(rc));    }
         else
-        {   NRFX_LOG_INFO("Record deletion [ %x : %x ] - Done", file, key);    }
+        {   NRF_LOG_INFO("Record deletion [ %x : %x ] - Done", file, key);    }
     }
     else
-    {   NRFX_LOG_INFO("Record deletion .. file [ %x : %x ] not found", file, key);    }
+    {   NRF_LOG_INFO("Record deletion .. file [ %x : %x ] not found", file, key);    }
 }
 
 /**@brief   Begin deleting all records, one by one. */
@@ -436,16 +443,18 @@ bool record_delete_next(void)
 void delete_all_process(void)
 {
     if (flash_control.delete_next & !flash_control.delete_pending)
-    {   NRF_LOG_INFO("Deleting next record.");
+    {   NRF_LOG_DEBUG("Deleting next record.");
 
         flash_control.delete_next = record_delete_next();
         if (!flash_control.delete_next)
-        {   NRF_LOG_INFO("No records left to delete."); }
+        {   set_address_default();
+            NRF_LOG_DEBUG("No records left to delete."); 
+        }
     }
 }
 
 void show_immediate(void)
-{   NRFX_LOG_INFO("Immediate Rec: Init[%x], Address[%x]", ddpc.nv_immediate.initialised , ddpc.nv_immediate.dev_address);   }
+{   NRF_LOG_INFO("Immediate Rec: Init[%x], Address[%x]", ddpc.nv_immediate.initialised , ddpc.nv_immediate.dev_address);   }
 
 void show_panic(void)
-{   NRFX_LOG_INFO("Panic Rec: Boots[%ld], FlashWrites[%ld], Erases[%ld], Uptime[%ld]", ddpc.nv_panic.boot_count, ddpc.nv_panic.flash_writes, ddpc.nv_panic.flash_erase, ddpc.nv_panic.uptime_mins); }
+{   NRF_LOG_INFO("Panic Rec: Boots[%ld], FlashWrites[%ld], Erases[%ld], Uptime[%ld]", ddpc.nv_panic.boot_count, ddpc.nv_panic.flash_writes, ddpc.nv_panic.flash_erase, ddpc.nv_panic.uptime_mins); }

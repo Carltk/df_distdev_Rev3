@@ -3,6 +3,8 @@
 #include "nrfx_temp.h"
 #include "nrfx_log.h"
 
+#include "app_button.h"
+
 #include "app_timer.h"
 #include "console_comms.h"
 #include "hardware_init.h"
@@ -22,13 +24,12 @@ static uint8_t console_port_check = 0;
 
 // function prototypes
 void temp_handler(int raw_temp);
-void rng_handler(uint8_t rng_data);
 ret_code_t init_temp(void);
 void app_timer_handle(void * p_context);
 void handle_push_button(void);
 void pump_state_machine(pump_controller_t *this_pump, pump_caller caller);
 void pump_clear_for_transaction(pump_controller_t *this_pump);
-void makeSysStatusFlashes(void);
+void ShowFullSysStatus(void);
 
 #define APP_MS_PER_TICK  100
 
@@ -146,28 +147,31 @@ void handle_push_button(void)
     {   
         NRFX_LOG_INFO("Button pressed for %d seconds", ((hardware.pushbutton_time[0] / 10) + 1));                   
         
-        switch ((hardware.pushbutton_time[0] / 10) + 1)     // time is 100mS slices .. make seconds
+        if (hardware.pushbutton_time[0] > 80)
         {
-            case 0: case 1:                     // 0-2 seconds
-                makeSysStatusFlashes();                     // Make the system status stack
-                break;
-            case 2: case 3: case 4:             // 2-5 sec            
-                pump_clear_for_transaction(&pump);
-                break;
-            case 5: case 6: case 7: case 8: case 9:     // 5-10 sec            
-                break;
-            default:                            // more than 10 seconds
-                //do_factory_default(false);
-                trigger_bootloader();
-                break;
+            switch ((hardware.pushbutton_time[0] / 10) + 1)     // time is 100mS slices .. make seconds
+            {
+                case 0: case 1:                     // 0-2 seconds
+                    ShowFullSysStatus();                     // Make the system status stack
+                    break;
+                case 2: case 3: case 4:             // 2-5 sec            
+                    pump_clear_for_transaction(&pump);
+                    break;
+                case 5: case 6: case 7: case 8: case 9:     // 5-10 sec            
+                    break;
+                default:                            // more than 10 seconds
+                    //do_factory_default(false);
+                    trigger_bootloader();
+                    break;
+            }
         }
-
+        
         hardware.pushbutton_time[0] = 0;                            // Clear the timer/counter once processing is finished
     }
 }
 
 
-void makeSysStatusFlashes(void)
+void ShowFullSysStatus(void)
 {   uint8_t a, c;
     
     wipeAllLEDSlots();
@@ -210,26 +214,34 @@ void temp_handler(int raw_temp)
 void update_temp(void)
 {   nrfx_temp_measure();    }
 
+void set_address_default(void)
+{
+    ddpc.nv_immediate.dev_address = DISCOVERY_DFLT_ADDR;
+    flash_control.do_immediate_save = true;
+
+    con_comms.discovery_temp_addr = DISCOVERY_DFLT_ADDR;
+}
+
 /**
 * @brief Function for clearing Device memory back to Factory default settings
 */
 void do_factory_default(bool SuperDflt)
 {   auto int a;
     
-    wipeAllLEDSlots();
-    a = addLEDPattern(PROC_LED_VIOLET, LED_FLASH_FAST, 40, 40, NULL, 0xFF);     // Start a fast flash in violet
-    loopLEDPattern(a, a);                                                       // change the linkNext pointer to itself    
+    wipeAllLEDSlots();                                                                  // LED Control .. clear current pattern
+    a = addLEDPattern(PROC_LED_VIOLET, LED_FLASH_FAST, 40, 40, NULL, 0xFF);         // LED Control .. Start a fast flash in violet
+    loopLEDPattern(a, a);                                                               // LED Control .. change the linkNext pointer to itself    
 
-    ddpc.nv_immediate.dev_address = DISCOVERY_DFLT_ADDR;
-    flash_control.do_immediate_save = true;
-
-    con_comms.discovery_temp_addr = DISCOVERY_DFLT_ADDR;
-    update_rng();
+    update_rng();   
 
     NRFX_LOG_INFO("*** Factory Default Done (All-delete=%d) ***", SuperDflt);
 
     if (SuperDflt)
     {   delete_all_begin(); }
+    else
+    {   set_address_default();   }
+
+    app_button_enable();
 
     //flash_control.gc_required = true;
 }

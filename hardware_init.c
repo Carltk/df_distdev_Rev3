@@ -10,7 +10,14 @@
 
 #include "nrf_delay.h"      // !!!CK - just for testing txEnable output
 
-#include "nrfx_log.h"
+#define NRF_LOG_MODULE_NAME hardware
+// <0=> Off, <1=> Error, <2=> Warning, <3=> Info, <4=> Debug 
+#define NRF_LOG_LEVEL       3
+#define NRF_LOG_INFO_COLOR  0
+#define NRF_LOG_DEBUG_COLOR 0
+#include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
+
 
 #include "led_control.h"
 #include "df_routines.h"
@@ -39,25 +46,25 @@ ret_code_t df_hardware_init(void)
 {   ret_code_t ret = NRF_SUCCESS;
 
     APP_ERROR_CHECK(nrfx_rng_init(&rng, rng_handler));
-    NRFX_LOG_INFO("RNG initialised and started");
+    NRF_LOG_INFO("RNG initialised and started");
 
     APP_ERROR_CHECK(df_led_init()); 
-    NRFX_LOG_INFO("LED Handler - Initialised"); 
+    NRF_LOG_INFO("LED Handler - Initialised"); 
 
     APP_ERROR_CHECK(df_inputs_init());              // Init the Nozzle handler
-    NRFX_LOG_INFO("Nozzle Handler - Initialised"); 
+    NRF_LOG_INFO("Nozzle Handler - Initialised"); 
 
     APP_ERROR_CHECK(df_relay_init());               // Init the Ouput Relay
-    NRFX_LOG_INFO("Relay Control - Initialised"); 
+    NRF_LOG_INFO("Relay Control - Initialised"); 
 
     APP_ERROR_CHECK(df_bl_trigger_init());          // Init the Bootloader-trigger
-    NRFX_LOG_INFO("Bootloader Triger - Initialised"); 
+    NRF_LOG_INFO("Bootloader Triger - Initialised"); 
 
     APP_ERROR_CHECK(df_pulser_init());              // Initialise the Pulser Counter
-    NRFX_LOG_INFO("Pulser Handler - Initialised");     
+    NRF_LOG_INFO("Pulser Handler - Initialised");     
 
     //APP_ERROR_CHECK(df_or_sense_init());              // Initialise the Pulser Counter
-    //NRFX_LOG_INFO("Override Sense Handler - Initialised");     
+    //NRF_LOG_INFO("Override Sense Handler - Initialised");     
 
 
     return ret;
@@ -102,12 +109,13 @@ ret_code_t df_inputs_init(void)
     ret = app_button_init(p_button, sizeof(p_button) / sizeof(p_button[digi_in_nozzle]), BUTTON_DEBOUNCE_MS);
     if (ret != NRFX_SUCCESS) goto NI_x;
     
-    ret = app_button_enable();
-
-NI_x:   // Special handling while starting
     if (app_button_is_pushed(digi_in_mode))                     // Initialisation with Mode button pressed
-    {   do_factory_default(true);   }                           // Do a full factory default
+    {   hardware.pushbutton_time[0] = 1;                        // Kludge here.. add a value to the timer so that df_mode_handler doesn't override the factDflt LED flash pattern
+        do_factory_default(true);   }                           // Do a full factory default
+    else
+    {   ret = app_button_enable();  }
 
+NI_x:   
     df_nozzle_handler(NOZZLE_PIN, app_button_is_pushed(digi_in_nozzle));    // Set the intial Nozzle state
 
     return(ret);
@@ -140,7 +148,7 @@ void df_nozzle_handler(uint8_t pin_no, uint8_t button_action)
                 components.comp_flags &= ~CONTROLLER_FLAG_NOZZLE;
             }
 
-            NRFX_LOG_INFO("Nozzle [%d] State [%x]", i, pinval); 
+            NRF_LOG_INFO("Nozzle [%d] State [%x]", i, pinval); 
 
             break;
         }
@@ -150,7 +158,7 @@ void df_nozzle_handler(uint8_t pin_no, uint8_t button_action)
 
 void df_mode_handler(uint8_t pin_no, uint8_t button_action)
 {   uint8_t a;
-    NRFX_LOG_INFO("Mode pin_no [%d] State [%x]", pin_no, button_action);                     
+    NRF_LOG_INFO("Mode pin_no [%d] State [%x]", pin_no, button_action);                     
     
     for (uint8_t i=0;i<NUM_PBS;i++)                                                 // The mode button handler is in the application timer handler so that different hold-times can be determined
     {   if (hardware.pushbutton_pin[i] = pin_no) 
@@ -162,7 +170,7 @@ void df_mode_handler(uint8_t pin_no, uint8_t button_action)
                 loopLEDPattern(a, a);                                                       // change the linkNext pointer to itself
             }
 
-            NRFX_LOG_INFO("Mode Button [%d] State [%x]", i, button_action);             
+            NRF_LOG_INFO("Mode Button [%d] State [%x]", i, button_action);             
             break;
         }
     }    
@@ -176,7 +184,7 @@ void df_psense_handler(uint8_t pin_no, uint8_t button_action)
     {   if (hardware.psense_pin[i] = pin_no)    
         {   pinval = button_action ^ hardware.psense_inverted[i];
             hardware.psense[i] = pinval; 
-            NRFX_LOG_INFO("PowerSense [%d] State [%x]", i, pinval); 
+            NRF_LOG_INFO("PowerSense [%d] State [%x]", i, pinval); 
             break;
         }
     }    
@@ -191,7 +199,7 @@ void df_gpin_handler(uint8_t pin_no, uint8_t button_action)
     {   if (hardware.gpin_pin[i] = pin_no) 
         {   pinval = button_action ^ hardware.gpin_inverted[i]; 
             hardware.gpin[i] = pinval; 
-            NRFX_LOG_INFO("GPIn [%d] State [%x]", i, pinval); 
+            NRF_LOG_INFO("GPIn [%d] State [%x]", i, pinval); 
             break;
         }
     }    
@@ -255,7 +263,7 @@ nrfx_timer_t pulse_counter = NRFX_TIMER_INSTANCE(DF_PULSER_TIMER_INST);         
 void df_pulser_timer_event_handler(nrf_timer_event_t event_type, void *p_context)
 //void df_pulser_timer_event_handler(void)
 {
-//   NRFX_LOG_INFO("Pulser Counter event handler"); 
+//   NRF_LOG_INFO("Pulser Counter event handler"); 
 }
 
 ret_code_t pulser_timer_setup(void)
@@ -286,7 +294,7 @@ TS_x:
 void df_gpiote_event_handler(nrfx_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
 {
 //   nrfx_timer_increment(&pulse_counter);
-//    NRFX_LOG_INFO("Pulser GPIOTE event handler at pin[%d], action[%x]", pin, action); 
+//    NRF_LOG_INFO("Pulser GPIOTE event handler at pin[%d], action[%x]", pin, action); 
 }
 
 ret_code_t pulser_gpiote_setup()                         
@@ -369,7 +377,7 @@ void clock_init(void)
 
     while (!nrfx_clock_lfclk_is_running()) {;}
 
-    NRFX_LOG_INFO("GP Clock (NV, LED) - Initialised"); 
+    NRF_LOG_INFO("GP Clock (NV, LED) - Initialised"); 
 }
 
 /**@brief   Initialize the App timer. */
@@ -378,7 +386,7 @@ void timer_init(void)
     ret_code_t err_code = app_timer_init();
     APP_ERROR_CHECK(err_code);
     
-    NRFX_LOG_INFO("GP Timer (NV, LED) - Initialised"); 
+    NRF_LOG_INFO("GP Timer (NV, LED) - Initialised"); 
 }
 
 
@@ -393,7 +401,7 @@ void rng_handler(uint8_t rng_data)
     if (ddpc.nv_immediate.dev_address == DISCOVERY_DFLT_ADDR)
     {  con_comms.discovery_holdoff = ((ddpc.my_rnd >> 5) + 1);        }
 
-NRF_LOG_INFO("Address Discovery holdoff changed to [%d]", con_comms.discovery_holdoff);
+    NRF_LOG_DEBUG("Address Discovery holdoff changed to [%d]", con_comms.discovery_holdoff);
 
 }
 

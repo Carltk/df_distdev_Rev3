@@ -166,6 +166,15 @@ void ledNewValPoke(uint8_t Idx);
 */
 static void setLEDSystemStatus(void);
 
+/**
+ * @brief Function to make system status flash pattern based on the current system state
+ *
+ * @param idx       feed-in flash pattern index for chaining
+ * @param single    single mode (for run-mode) or dual-line for system status
+ * @param ddpc      ddpc - system status structure
+ * @return          feed-out index for chaining
+ * */
+uint8_t makeSysStatusFlashes(uint8_t idx, ddpc_t dd, bool single);
 
 /**
  * @brief Function to make comms status flash pattern based on the current comms state

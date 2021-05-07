@@ -3,7 +3,14 @@
 #include "nrfx_i2s.h"
 
 #include "nrf_delay.h"
-#include "nrfx_log.h"
+
+#define NRF_LOG_MODULE_NAME led_control
+// <0=> Off, <1=> Error, <2=> Warning, <3=> Info, <4=> Debug 
+#define NRF_LOG_LEVEL       3
+#define NRF_LOG_INFO_COLOR  0
+#define NRF_LOG_DEBUG_COLOR 0
+#include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
 
 #include "df_routines.h"
 #include "led_control.h"
@@ -78,11 +85,11 @@ ret_code_t df_led_init(void)
 
     if (ret != NRFX_SUCCESS)
     goto IL_x;
-//    NRFX_LOG_INFO("i2s module initialised"); 
+//    NRF_LOG_INFO("i2s module initialised"); 
 
     ret = app_timer_create(&led_timer, APP_TIMER_MODE_REPEATED, led_timer_handle);  // Create an AppTimer for the Led controller
     if (ret != NRFX_SUCCESS) goto IL_x;     
-//    NRFX_LOG_INFO("LED Control - app timer created");           
+//    NRF_LOG_INFO("LED Control - app timer created");           
 
     ret = app_timer_start(led_timer, APP_TIMER_TICKS(LED_MS_PER_TICK), NULL);       // Start the AppTimer
     if (ret != NRFX_SUCCESS) goto IL_x; 
@@ -129,7 +136,7 @@ uint8_t addLEDPattern(const uint8_t * colourAry, uint32_t flashPattern, uint8_t 
         }
     }
 
-//    NRFX_LOG_INFO("leds: added pattern at [%d]", thisSlot);                 
+//    NRF_LOG_INFO("leds: added pattern at [%d]", thisSlot);                 
 
     return(thisSlot);
 }
@@ -165,7 +172,7 @@ static void i2s_data_handler(nrfx_i2s_buffers_t const * p_released, uint32_t sta
     {   nrfx_i2s_stop();   
         i2s_running = false;
         i2s_errcount = 0;
-        //NRFX_LOG_INFO("leds: i2s stop");
+        //NRF_LOG_INFO("leds: i2s stop");
     }  
 }
 
@@ -200,14 +207,14 @@ static void fillBuffers(uint8_t RVal, uint8_t GVal, uint8_t BVal, bool ledState)
         m_buffer_tx[1] = calcChannelVal(RVal);
         m_buffer_tx[2] = calcChannelVal(BVal);
         i2s_is_dark = false;
-        //NRFX_LOG_INFO("leds: sending [R%d,G%d,B%d]", RVal, GVal, BVal);    
+        //NRF_LOG_INFO("leds: sending [R%d,G%d,B%d]", RVal, GVal, BVal);    
     }
     else
     {   for (uint8_t i=0; i<NUM_COLOURS;i++)                // ledState OFF .. fill all 3 colour values with 0
         {   m_buffer_tx[i] =  0x88888888;   
             i2s_is_dark = true;
         }
-        //NRFX_LOG_INFO("leds: sending dark");  
+        //NRF_LOG_INFO("leds: sending dark");  
     }
 
     memset(&m_buffer_tx[3], 0x00, (4 * RESET_BITS));    // Clear 6 buffers from [3] onwards to make the >50uS reset pulse
@@ -226,7 +233,7 @@ static ret_code_t sendLEDBlocks(proc_led_t * PL, bool ledState)
     {   fillBuffers(PL->colourVal[0], PL->colourVal[1], PL->colourVal[2], ledState);
         ret = nrfx_i2s_start(&m_buffer, I2S_BUFFER_SIZE, 0);
         nrf_delay_ms(1);
-        //NRFX_LOG_INFO("leds: i2s Start");                 
+        //NRF_LOG_INFO("leds: i2s Start");                 
         i2s_running = true;
     }
     else
@@ -244,19 +251,12 @@ static void setLEDSystemStatus()
 {   uint8_t a, c;
     
     wipeAllLEDSlots();   
-    // system status has 3 flashes:
-        // 1 - system state
-            // Green=OK, 
-            // TODO add more system states
-        // 2 - comms state
-            // 
-        // 3 - pump state
+    // system status has 3 flashes: 1 - system state; 2 - comms state; 3 - pump state
     // Add patterns backwards
     a = addLEDPattern(PROC_LED_WHITE, LED_FLASH_OFF, 8, 16, setLEDSystemStatus, 0xFF);   // just a place-holder (1/8 sec) for the reload routine
     c = makePumpStatusFlashes(a, pump.pump_state, true);
     c = makeCommsStatusFlashes(c, con_comms.comms_state, true);
-    c = addLEDPattern(PROC_LED_GREEN, LED_6ON_2OFF, 8, 16, NULL, c);      // Green 0.5S ON, 0.5S OFF. cycle every 2S, Never timeout, link next     
-    //c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_MED, 32, 0xFF, NULL, 0xFF);      // Green 0.5S ON, 0.5S OFF. cycle every 2S, Never timeout, link next     
+    c = makeSysStatusFlashes(c, ddpc, true);
     loopLEDPattern(a, c);
 }
 
@@ -318,7 +318,7 @@ static void led_timer_handle(void * p_context)
             if (PL->status.slotTimeLeft != 0xFF)                     // Check to see if this is an expireable slot
             {   PL->status.slotTimeLeft -= 1;                        // decrement its counter
                 if (PL->status.slotTimeLeft == 0)                    // if it reaches 0
-                {   //NRFX_LOG_INFO("leds: slot timeout on idx [%d]", i);                 
+                {   //NRF_LOG_INFO("leds: slot timeout on idx [%d]", i);                 
                     procled_current = clearLEDSlot(i);             // delete the slot
                     return;       
                 }
@@ -326,7 +326,7 @@ static void led_timer_handle(void * p_context)
 
             PL->status.cycleDwellCount -= 1;                        // Check to see if we've timed out this colour
             if (PL->status.cycleDwellCount == 0)                    // yes?
-            {   //NRFX_LOG_INFO("leds: cycle dwell timeout on idx [%d]", i);                 
+            {   //NRF_LOG_INFO("leds: cycle dwell timeout on idx [%d]", i);                 
                 PL->status.cycleDwellCount = PL->cycleDwell;        // reset the cycle dwell counter
                 
                 if (PL->linkNext != 0xFF)                           // see if we have a next-slot-link
@@ -350,7 +350,28 @@ static void led_timer_handle(void * p_context)
     {   setLEDSystemStatus();             }   // if there are no active slots, reinit to OK green flash
 }
 
+uint8_t makeSysStatusFlashes(uint8_t idx, ddpc_t dd, bool single)
+{   uint8_t c;
+    uint8_t * colourAry;
+    
+    colourAry = (char*)PROC_LED_GREEN;                        // default to Green
 
+    if (dd.nv_panic.flash_erase > 10000)                // Excessive Flash erases 
+    {   colourAry = (char*)PROC_LED_RED;   }                  // .. Red flash
+    else if (dd.curr_temp > OVER_TEMP_THRESHOLD)        // Too hot
+    {   colourAry = (char*)PROC_LED_MAGENTA;   }              // .. Magenta Flash
+    else if (dd.nv_immediate.dev_address == 0xFFFE)     // Factory Default Address
+    {   colourAry = (char*)PROC_LED_ORANGE;   }               // .. Orange Flash
+    else if ((dd.nv_immediate.dev_address & 0xFF00) == 0xFF00)     // Temporary Address
+    {   colourAry = (char*)PROC_LED_YELLOW;   }               // .. Yellow Flash
+
+    c = addLEDPattern(colourAry, LED_6ON_2OFF, 8, 16, NULL, idx);
+
+    if (single == false)
+    {   c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_ON, 8, 16, NULL, c);     }
+
+    return(c);
+}
 
 uint8_t makeCommsStatusFlashes(uint8_t idx, comms_state_t cs, bool single)
 {   uint8_t c;
