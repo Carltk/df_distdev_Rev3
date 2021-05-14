@@ -254,7 +254,7 @@ msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
 
                 if (ddpc.nv_immediate.dev_address & 0xFF00)                 // and only if we haven't got a real (adopted) address
                 {   NRF_LOG_INFO("Comms Discovery, Holdoff [%d]", rd->discovery_holdoff);                                  
-                    if (rd->rx_buf[RXBUF_COMMAND] == FD_CMD_DISCOVER)       // -> Only respond to Discovery commands
+                    if (rd->rx_buf[RXBUF_COMMAND] == FD_CMD_ADOPT)       // -> Only respond to Discovery commands
                     {   
                         rd->discovery_holdoff -= 1;                         // -> dec the holdoff counter
                         if (!rd->discovery_holdoff)                         //   .. if we get to 0
@@ -329,6 +329,9 @@ void interpret_msg(msg_data_t *md)
             do_sys_reset();
             break;
         case FD_CMD_DESC:               // Fetch description of the Controller
+            memcpy(&buf[char_cnt], &ddpc.my_id, sizeof(ddpc.my_id));                    // send the DeviceID as payload of the Description packet .. move data across
+            char_cnt += sizeof(ddpc.my_id);                                             // Advance the buffer count 
+            send_resp = true;
             break;
         case FD_CMD_STAT: 		// Fetch controller Status
             send_resp = true;
@@ -368,7 +371,7 @@ void interpret_msg(msg_data_t *md)
         case FD_CMD_LDAPP: 		// Load the new application and reset
             NRF_LOG_INFO("Unknown Command Rx [%x]", md->msg_buf[MSGBUF_COMMAND]);
             break;
-        case FD_CMD_DISCOVER:
+        case FD_CMD_ADOPT:
             con_comms.discovery_temp_addr = buf2int(&md->msg_buf[MSGBUF_PAYLOAD]);      // Message contains the temporary address 0xFF<TempIndex> in payload (also capture the temporary address)
             ddpc.nv_immediate.dev_address = buf2int(&md->msg_buf[MSGBUF_PAYLOAD]);      // Message contains the temporary address 0xFF<TempIndex> in payload (also capture the temporary address)
             flash_control.do_immediate_save = true;

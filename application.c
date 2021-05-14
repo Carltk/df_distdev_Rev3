@@ -160,8 +160,8 @@ void handle_push_button(void)
                 case 5: case 6: case 7: case 8: case 9:     // 5-10 sec            
                     break;
                 default:                            // more than 10 seconds
-                    //do_factory_default(false);
-                    trigger_bootloader();
+                    do_factory_default(false);
+                    //trigger_bootloader();
                     break;
             }
         }

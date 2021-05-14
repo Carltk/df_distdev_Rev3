@@ -41,7 +41,7 @@
 #define FD_CMD_CS 		 0x10    // Fetch the KbdLCD Controller checksum
 #define FD_CMD_LDAPP 		 0x11    // Load the new application and reset
 
-#define FD_CMD_DISCOVER          0x40    // DDPC Device adoption 
+#define FD_CMD_ADOPT             0x40    // DDPC Device adoption 
 #define FD_CMD_IDENT             0x41    // DDPC Device Identification
     #define IDENT_LED            0x01    // Ident Command Payload flag bit .. Flash the LED
     #define IDENT_RELAY          0x02    // Ident Command Payload flag bit .. Turn on the Relay for 5 Sec
