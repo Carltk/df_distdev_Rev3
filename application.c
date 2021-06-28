@@ -149,19 +149,19 @@ void handle_push_button(void)
         
         if (hardware.pushbutton_time[0] > 80)
         {
-            switch ((hardware.pushbutton_time[0] / 10) + 1)     // time is 100mS slices .. make seconds
+            switch ((hardware.pushbutton_time[0] / 10) + 1)  // time is 100mS slices .. make seconds
             {
-                case 0: case 1:                     // 0-2 seconds
+                case 0: case 1:                              // 0-2 seconds
                     ShowFullSysStatus();                     // Make the system status stack
                     break;
-                case 2: case 3: case 4:             // 2-5 sec            
+                case 2: case 3: case 4:                     // 2-5 sec            
                     pump_clear_for_transaction(&pump);
                     break;
                 case 5: case 6: case 7: case 8: case 9:     // 5-10 sec            
-                    break;
-                default:                            // more than 10 seconds
                     do_factory_default(false);
-                    //trigger_bootloader();
+                    break;
+                default:                                    // more than 10 seconds
+                    trigger_bootloader();
                     break;
             }
         }

@@ -107,7 +107,9 @@ https://devzone.nordicsemi.com/nordic/short-range-guides/b/getting-started/posts
     - Application must be built so that Flash and RAM does not conflict with the MBR and Bootloader
     - Do I need to provide a USB backend for logging for the project?
         - Do I need to do a USB CLI?
-    - 
+
+
+
 
 
 

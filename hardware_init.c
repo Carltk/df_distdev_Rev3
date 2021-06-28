@@ -111,7 +111,8 @@ ret_code_t df_inputs_init(void)
     
     if (app_button_is_pushed(digi_in_mode))                     // Initialisation with Mode button pressed
     {   hardware.pushbutton_time[0] = 1;                        // Kludge here.. add a value to the timer so that df_mode_handler doesn't override the factDflt LED flash pattern
-        do_factory_default(true);   }                           // Do a full factory default
+        trigger_bootloader();
+    }                           // Do a full factory default
     else
     {   ret = app_button_enable();  }
 

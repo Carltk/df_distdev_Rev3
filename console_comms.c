@@ -72,7 +72,7 @@ ret_code_t swap_baud(const nrf_libuarte_drv_t * const p_libuarte);
 msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd);
 bool is_checksum_ok(con_comms_t *rd);
 uint8_t make_lrc(char *buf, uint8_t cnt);
-void interpret_msg(msg_data_t *md);
+void interpret_msg(msg_data_t *md, con_comms_t *rd);
 uint8_t handle_action_cmd(msg_data_t *md, char *buf);
 uint8_t send_attr_bytes(msg_data_t *md, char *buf, char bytes_reqd);
 
@@ -172,9 +172,11 @@ void handle_new_console_packet(void)
 {   df_packet_ctl_t * pc = get_packet_control(&intbus);
 
     if (pc->tx_reflection == false)
-    {   get_msg_data(&msg_data, &con_comms);   }
-
-    clr_pkt_ctl(&intbus);               // Finished with the packet meta-data
+    {  if (get_msg_data(&msg_data, &con_comms) >= MSG_COMPLETE)
+       {   clr_pkt_ctl(&intbus);     }
+    }
+    else
+    {   clr_pkt_ctl(&intbus);     }                        // Finished with the packet meta-data
 
     con_comms.err_count = 0;
 }
@@ -244,6 +246,8 @@ msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
         
         md->msg_type = rd->rx_buf[RXBUF_TYPE];
 
+        // NRF_LOG_INFO("Comms Type[%x] Addr [%x], val[%x]", md->msg_type, md->msg_addr, rd->rx_buf[RXBUF_ADDR]);                                  
+
         if (isInCharArray(md->msg_type, ddpc.dev_types, NUM_DEV_TYPES))     // See if the message type matches one in my array of acceptable types
         {   md->msg_addr = buf2int(&rd->rx_buf[RXBUF_ADDR]);                // grab the address from the message
 
@@ -292,7 +296,7 @@ msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
 
                 md->msg_state = retval = MSG_OK;                                // and set the return value
                 // NRF_LOG_INFO("Comms: Msg for me");
-                interpret_msg(md);
+                interpret_msg(md, rd);
             }
             else
             {   md->msg_state = retval = MSG_BAD_CS;                           // bad message, output error message
@@ -305,7 +309,7 @@ msg_state_t get_msg_data(msg_data_t *md, con_comms_t *rd)
     return(retval);
 }
 
-void interpret_msg(msg_data_t *md)
+void interpret_msg(msg_data_t *md, con_comms_t *rd)
 {
     char buf[TX_BUF_SIZE];
     uint8_t char_cnt;
@@ -322,8 +326,17 @@ void interpret_msg(msg_data_t *md)
     {
         case FD_CMD_RESET:              // reset request
             if (md->msg_char_count == MSG_MIN_SIZE + 1)
-            {   if (md->msg_buf[MSGBUF_PAYLOAD] == 0xFF)    // Check for 0xFF payload (Factory Default)
-                { do_factory_default(false);     }           // !!!CK Here - "true" here resets Flash .. is this a valid Production operation?
+            {   if (md->msg_buf[MSGBUF_PAYLOAD] == 0xFF)        // Check for 0xFF payload (Factory Default)
+                {   do_factory_default(false);  
+                    break;
+                }               // do the FactoryDefault
+                else if (md->msg_buf[MSGBUF_PAYLOAD] == 0x55)
+                {   if ((md->msg_addr == ALL_CALL_ADDR) && ((ddpc.nv_immediate.dev_address & 0xFF00) == 0))  // If Device has a real address and the message is to ALLCALL
+                    {   if (rd->comms_state < COMMS_ONLINE)     // And Device is not online rd->comms_state < COMMS_ONLINE
+                        {   ddpc.nv_immediate.dev_address = DISCOVERY_DFLT_ADDR;   }     
+                    }
+                    break;
+                }
             }    
             send_resp = true;
             do_sys_reset();
@@ -426,7 +439,7 @@ void interpret_msg(msg_data_t *md)
             break;
     }
 
-    if (send_resp = true)
+    if (send_resp == true)
     {   c = make_lrc(buf, char_cnt);
         buf[char_cnt++] = c;
         char_cnt = ConsoleWrite(buf, char_cnt);  

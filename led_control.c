@@ -266,14 +266,14 @@ static void setStartupLEDState(void)
     wipeAllLEDSlots();
 
     // add patterns backwards to capture the nextLink
-    a = addLEDPattern(PROC_LED_WHITE, LED_FLASH_OFF, 4, 8, NULL, 0xFF);   // Blank 
-    c = addLEDPattern(PROC_LED_WHITE, LED_FLASH_ON, 2, 4, NULL, a);   
-    c = addLEDPattern(PROC_LED_CYAN, LED_FLASH_ON, 2, 4, NULL, c);  
-    c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_ON, 2, 4, NULL, c);  
-    c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_ON, 2, 4, NULL, c); 
-    c = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_ON, 2, 4, NULL, c);
-    c = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_ON, 2, 4, NULL, c);
-    c = addLEDPattern(PROC_LED_RED, LED_FLASH_ON, 2, 4, NULL, c);      // Red, ON, dwell=2/8S, delete=2/8S
+    a = addLEDPattern(PROC_LED_WHITE, LED_FLASH_OFF, 1, 1, NULL, 0xFF);   // Blank 
+    c = addLEDPattern(PROC_LED_WHITE, LED_FLASH_ON, 1, 1, NULL, a);   
+    c = addLEDPattern(PROC_LED_CYAN, LED_FLASH_ON, 1, 1, NULL, c);  
+    c = addLEDPattern(PROC_LED_BLUE, LED_FLASH_ON, 1, 1, NULL, c);  
+    c = addLEDPattern(PROC_LED_GREEN, LED_FLASH_ON, 1, 1, NULL, c); 
+    c = addLEDPattern(PROC_LED_YELLOW, LED_FLASH_ON, 1, 1, NULL, c);
+    c = addLEDPattern(PROC_LED_ORANGE, LED_FLASH_ON, 1, 1, NULL, c);
+    c = addLEDPattern(PROC_LED_RED, LED_FLASH_ON, 1, 1, NULL, c);      // Red, ON, dwell=2/8S, delete=2/8S
     loopLEDPattern(a, c);
 }
 

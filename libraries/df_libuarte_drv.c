@@ -198,7 +198,7 @@ ret_code_t nrf_libuarte_drv_init(const nrf_libuarte_drv_t * const p_libuarte,
     nrfx_uart_config_t uc = NRFX_UART_DEFAULT_CONFIG;
     uc.pseltxd = p_config->tx_pin;
     uc.pselrxd = p_config->rx_pin;
-    uc.p_context = p_libuarte;
+    uc.p_context = (void *)p_libuarte;
     uc.baudrate = p_config->baudrate;
     
     ret = nrfx_uart_init(&p_libuarte->uart, &uc, irq_handler);

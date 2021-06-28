@@ -272,7 +272,8 @@ uint32_t bsp_board_button_idx_to_pin(uint32_t button_idx)
 
 void bsp_board_init(uint32_t init_flags)
 {
-    #if defined(BOARDS_WITH_USB_DFU_TRIGGER) && (defined(BOARD_PCA10059) || defined(BOARD_PCA10059_DF)  || defined(BOARD_DDPC_REV2))
+    
+    #if ( defined(BOARDS_WITH_USB_DFU_TRIGGER) && (defined(BOARD_PCA10059) || defined(BOARD_PCA10059_DF) || defined(BOARD_DDPC_REV2) || defined(BOARD_DDPC_REV3)) )
     (void) nrf_dfu_trigger_usb_init();
     #endif
 

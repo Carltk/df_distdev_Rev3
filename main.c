@@ -54,7 +54,8 @@
 #include "nrfx_clock.h"
 #include "nrfx_power.h"
 
-#include "nrf_ficr.h"            
+#include "nrf_ficr.h"  
+// #include "app_usbd_serial_num.h" // Do I need to add this when USB_CLI is enabled?
 
 #include "nrfx_log.h"
 #include "nrf_log_ctrl.h"
@@ -90,6 +91,8 @@ int main(void)
     uint8_t need_reset = 0;
 
     gpio_output_voltage_setup();    // Set up the onboard voltage regulators
+    
+    // app_usbd_serial_num_generate();	 // Do I need to add this when USB_CLI is enabled?
 
     NRFX_LOG_INFO("*** Starting DF_DistDev Application ***");
 
